@@ -48,8 +48,8 @@
     "logout": "Logout"
   },
   "login": {
-    "pageTitle": "AionUi - Sign In",
-    "brand": "AionUi",
+    "pageTitle": "Neuro - Sign In",
+    "brand": "Neuro",
     "subtitle": "Welcome back, please sign in to your account",
     "username": "Username",
     "usernamePlaceholder": "Enter your username",
