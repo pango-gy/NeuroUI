@@ -269,6 +269,7 @@
   },
   "settings": {
     "title": "설정",
+    "display": "화면",
     "authMethod": "인증",
     "geminiApiKey": "Gemini API 키",
     "vertexApiKey": "Vertex AI",

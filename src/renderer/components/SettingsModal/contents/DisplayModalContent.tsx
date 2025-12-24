@@ -72,12 +72,12 @@ const DisplayModalContent: React.FC = () => {
             </div>
           </div>
 
-          {/* CSS 主题设置 / CSS Theme Settings - Collapsible */}
-          <AionCollapse bordered={false} defaultActiveKey={['css']} expandIcon={renderExpandIcon} expandIconPosition='right'>
+          {/* CSS 주제 설정 - 주석 처리 */}
+          {/* <AionCollapse bordered={false} defaultActiveKey={['css']} expandIcon={renderExpandIcon} expandIconPosition='right'>
             <AionCollapse.Item name='css' header={<span className='text-14px text-2'>{t('settings.cssSettings')}</span>} className='bg-transparent' contentStyle={{ padding: '12px 0 0' }}>
               <CssThemeSettings />
             </AionCollapse.Item>
-          </AionCollapse>
+          </AionCollapse> */}
         </div>
       </AionScrollArea>
     </div>
