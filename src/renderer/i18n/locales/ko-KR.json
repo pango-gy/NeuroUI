@@ -466,15 +466,16 @@
     "processing": "처리 중...",
     "responseSentSuccessfully": "응답 전송 성공",
     "confirmation": {
-      "applyChange": "이 변경사항을 적용하시겠습니까?",
-      "allowExecution": "실행을 허용하시겠습니까?",
-      "proceed": "진행하시겠습니까?",
-      "allowMCPTool": "서버 \"{{serverName}}\"의 MCP 도구 \"{{toolName}}\" 실행을 허용하시겠습니까?",
-      "yesAllowOnce": "예, 한 번만 허용",
-      "yesAllowAlways": "예, 항상 허용",
-      "yesAlwaysAllowTool": "예, 서버 \"{{serverName}}\"의 \"{{toolName}}\" 도구 항상 허용",
-      "yesAlwaysAllowServer": "예, 서버 \"{{serverName}}\"의 모든 도구 항상 허용",
-      "no": "아니오 (esc)"
+      "applyChange": "이 변경사항을 적용할까요?",
+      "allowExecution": "아래 명령을 실행해도 될까요?",
+      "proceed": "계속 진행할까요?",
+      "allowMCPTool": "외부 서비스를 사용하려고 해요",
+      "allowMCPToolDesc": "\"{{serverName}}\" 서비스의 \"{{toolName}}\" 기능이에요",
+      "yesAllowOnce": "네, 이번만 허용할게요",
+      "yesAllowAlways": "네, 앞으로도 허용할게요",
+      "yesAlwaysAllowTool": "네, \"{{toolName}}\" 기능은 항상 허용할게요",
+      "yesAlwaysAllowServer": "네, \"{{serverName}}\" 서비스는 모두 허용할게요",
+      "no": "아니요, 취소할게요"
     }
   },
   "mcp": {

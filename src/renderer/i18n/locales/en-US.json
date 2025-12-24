@@ -487,15 +487,16 @@
     "processing": "Processing...",
     "responseSentSuccessfully": "Response sent successfully",
     "confirmation": {
-      "applyChange": "Apply this change?",
-      "allowExecution": "Allow execution?",
-      "proceed": "Do you want to proceed?",
-      "allowMCPTool": "Allow execution of MCP tool \"{{toolName}}\" from server \"{{serverName}}\"?",
-      "yesAllowOnce": "Yes, allow once",
-      "yesAllowAlways": "Yes, allow always",
-      "yesAlwaysAllowTool": "Yes, always allow tool \"{{toolName}}\" from server \"{{serverName}}\"",
-      "yesAlwaysAllowServer": "Yes, always allow all tools from server \"{{serverName}}\"",
-      "no": "No (esc)"
+      "applyChange": "Would you like to apply this change?",
+      "allowExecution": "Can I run this command?",
+      "proceed": "Should we continue?",
+      "allowMCPTool": "I'd like to use an external service",
+      "allowMCPToolDesc": "Using \"{{toolName}}\" from \"{{serverName}}\"",
+      "yesAllowOnce": "Yes, allow this time",
+      "yesAllowAlways": "Yes, always allow",
+      "yesAlwaysAllowTool": "Yes, always allow \"{{toolName}}\"",
+      "yesAlwaysAllowServer": "Yes, allow all from \"{{serverName}}\"",
+      "no": "No, cancel"
     }
   },
   "mcp": {

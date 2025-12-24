@@ -129,6 +129,9 @@ const ConfirmationDetails: React.FC<{
   const { t } = useTranslation();
   const { confirmationDetails } = content;
   if (!confirmationDetails) return;
+
+  const isMcp = confirmationDetails.type === 'mcp' || !['edit', 'exec', 'info'].includes(confirmationDetails.type);
+
   const node = useMemo(() => {
     if (!confirmationDetails) return null;
     const isConfirm = content.status === 'Confirming';
@@ -150,7 +153,7 @@ const ConfirmationDetails: React.FC<{
       case 'info':
         return <span className='text-t-primary'>{confirmationDetails.prompt}</span>;
       case 'mcp':
-        return <span className='text-t-primary'>{confirmationDetails.toolDisplayName}</span>;
+        return null; // MCP는 별도 UI로 처리
     }
   }, [confirmationDetails, content]);
 
@@ -158,6 +161,57 @@ const ConfirmationDetails: React.FC<{
 
   const [selected, setSelected] = useState<ToolConfirmationOutcome | null>(null);
 
+  // MCP 도구 권한 요청 - 카드 스타일 UI
+  if (isMcp && content.status === 'Confirming') {
+    const mcpProps = confirmationDetails as { toolName?: string; serverName?: string; toolDisplayName?: string };
+    return (
+      <div className='bg-[var(--fill-1)] rd-16px p-20px border border-solid border-[var(--border-2)]'>
+        {/* 헤더 - 이모지와 친절한 제목 */}
+        <div className='flex items-center gap-12px mb-16px'>
+          <div className='w-40px h-40px rd-12px bg-gradient-to-br from-[rgb(var(--primary-5))] to-[rgb(var(--primary-6))] flex items-center justify-center text-20px'>🔧</div>
+          <div>
+            <div className='text-16px font-semibold text-t-primary'>{t('messages.confirmation.allowMCPTool')}</div>
+            <div className='text-13px text-t-secondary mt-2px'>
+              {t('messages.confirmation.allowMCPToolDesc', {
+                toolName: mcpProps.toolName,
+                serverName: mcpProps.serverName,
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* 도구 정보 태그 */}
+        {mcpProps.toolDisplayName && (
+          <div className='mb-16px'>
+            <Tag className='!rd-8px !px-12px !py-4px !text-13px' color='arcoblue'>
+              {mcpProps.toolDisplayName}
+            </Tag>
+          </div>
+        )}
+
+        {/* 옵션 리스트 - 클릭 가능한 카드 스타일 */}
+        <div className='flex flex-col gap-8px'>
+          {options.map((item) => (
+            <div key={item.value} className={`p-12px rd-12px border border-solid cursor-pointer transition-all duration-200 ${selected === item.value ? 'border-[rgb(var(--primary-5))] bg-[rgba(var(--primary-1),0.5)]' : 'border-[var(--border-2)] hover:border-[var(--border-3)] hover:bg-[var(--fill-2)]'}`} onClick={() => setSelected(item.value)}>
+              <div className='flex items-center gap-10px'>
+                <div className={`w-18px h-18px rd-full border-2 border-solid flex items-center justify-center flex-shrink-0 ${selected === item.value ? 'border-[rgb(var(--primary-5))]' : 'border-[var(--border-3)]'}`}>{selected === item.value && <div className='w-10px h-10px rd-full bg-[rgb(var(--primary-5))]' />}</div>
+                <span className='text-14px text-t-primary'>{item.label}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 확인 버튼 */}
+        <div className='mt-16px'>
+          <Button type='primary' size='large' className='!rd-12px !w-full' disabled={!selected} onClick={() => onConfirm(selected!)}>
+            {t('messages.confirm')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // 기존 스타일 (edit, exec, info)
   return (
     <div>
       {node}
@@ -174,7 +228,7 @@ const ConfirmationDetails: React.FC<{
             })}
           </Radio.Group>
           <div className='flex justify-start pl-20px'>
-            <Button type='primary' size='mini' disabled={!selected} onClick={() => onConfirm(selected)}>
+            <Button type='primary' size='mini' disabled={!selected} onClick={() => onConfirm(selected!)}>
               {t('messages.confirm')}
             </Button>
           </div>
