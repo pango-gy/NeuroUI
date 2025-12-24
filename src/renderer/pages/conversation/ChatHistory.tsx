@@ -7,6 +7,7 @@
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/storage';
 import FlexFullContainer from '@/renderer/components/FlexFullContainer';
+import { useAuth } from '@/renderer/context/AuthContext';
 import { addEventListener, emitter } from '@/renderer/utils/emitter';
 import { Empty, Popconfirm, Input, Tooltip } from '@arco-design/web-react';
 import { DeleteOne, MessageOne, EditOne } from '@icon-park/react';
@@ -92,6 +93,7 @@ const ChatHistory: React.FC<{ onSessionClick?: () => void; collapsed?: boolean }
   const { id } = useParams();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { currentWorkspace } = useAuth();
 
   useScrollIntoView(id);
 
@@ -112,8 +114,9 @@ const ChatHistory: React.FC<{ onSessionClick?: () => void; collapsed?: boolean }
   useEffect(() => {
     const refresh = () => {
       // Get conversations from database instead of file storage
+      // Filter by workspaceId if available
       ipcBridge.database.getUserConversations
-        .invoke({ page: 0, pageSize: 10000 })
+        .invoke({ page: 0, pageSize: 10000, workspaceId: currentWorkspace?.id })
         .then((history) => {
           if (history && Array.isArray(history) && history.length > 0) {
             const sortedHistory = history.sort((a, b) => getActivityTime(b) - getActivityTime(a));
@@ -129,7 +132,7 @@ const ChatHistory: React.FC<{ onSessionClick?: () => void; collapsed?: boolean }
     };
     refresh();
     return addEventListener('chat.history.refresh', refresh);
-  }, [isConversation]);
+  }, [isConversation, currentWorkspace?.id]);
 
   const handleRemoveConversation = (id: string) => {
     void ipcBridge.conversation.remove

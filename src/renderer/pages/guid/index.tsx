@@ -33,6 +33,7 @@ import { IconClose } from '@arco-design/web-react/icon';
 import { ArrowUp, FolderOpen, MenuFold, MenuUnfold, Plus, Robot, UploadOne } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/renderer/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import styles from './index.module.css';
@@ -133,6 +134,7 @@ const AGENT_LOGO_MAP: Partial<Record<AcpBackend, string>> = {
 
 const Guid: React.FC = () => {
   const { t } = useTranslation();
+  const { currentWorkspace } = useAuth();
   const guidContainerRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -294,6 +296,7 @@ const Guid: React.FC = () => {
           type: 'gemini',
           name: input,
           model: currentModel,
+          workspaceId: currentWorkspace?.id,
           extra: {
             defaultFiles: files,
             workspace: dir,
@@ -329,6 +332,7 @@ const Guid: React.FC = () => {
           type: 'codex',
           name: input,
           model: currentModel!, // not used by codex, but required by type
+          workspaceId: currentWorkspace?.id,
           extra: {
             defaultFiles: files,
             workspace: dir,
@@ -367,12 +371,13 @@ const Guid: React.FC = () => {
           type: 'acp',
           name: input,
           model: currentModel!, // ACP needs a model too
+          workspaceId: currentWorkspace?.id,
           extra: {
             defaultFiles: files,
             workspace: workingDir,
             backend: selectedAgent,
             cliPath: agentInfo.cliPath,
-            agentName: agentInfo.name, // 存储自定义代理的配置名称 / Store configured name for custom agents
+            agentName: agentInfo.name, // 존储自定义代理的配置名称 / Store configured name for custom agents
             customAgentId: agentInfo.customAgentId, // 自定义代理的 UUID / UUID for custom agents
           },
         });

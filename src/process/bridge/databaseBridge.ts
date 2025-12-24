@@ -24,11 +24,16 @@ export function initDatabaseBridge(): void {
   });
 
   // Get user conversations from database with lazy migration from file storage
-  ipcBridge.database.getUserConversations.provider(async ({ page = 0, pageSize = 10000 }) => {
+  ipcBridge.database.getUserConversations.provider(async ({ page = 0, pageSize = 10000, workspaceId }) => {
     try {
       const db = getDatabase();
-      const result = db.getUserConversations(undefined, page, pageSize);
+      const result = db.getUserConversations(undefined, page, pageSize, workspaceId);
       const dbConversations = result.data || [];
+
+      // If workspaceId is specified, skip file migration (file storage doesn't have workspace info)
+      if (workspaceId) {
+        return dbConversations;
+      }
 
       // Try to get conversations from file storage
       let fileConversations: TChatConversation[] = [];

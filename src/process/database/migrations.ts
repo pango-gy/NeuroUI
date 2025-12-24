@@ -162,9 +162,46 @@ const migration_v6: IMigration = {
 };
 
 /**
+ * Migration v6 -> v7: Add workspace_id column to conversations table
+ * Enable filtering conversations by brand/workspace
+ */
+const migration_v7: IMigration = {
+  version: 7,
+  name: 'Add workspace_id to conversations table',
+  up: (db) => {
+    // Check if workspace_id column already exists
+    const tableInfo = db.prepare('PRAGMA table_info(conversations)').all() as Array<{ name: string }>;
+    const hasWorkspaceId = tableInfo.some((col) => col.name === 'workspace_id');
+
+    if (!hasWorkspaceId) {
+      // Add workspace_id column to conversations table
+      db.exec(`ALTER TABLE conversations ADD COLUMN workspace_id TEXT;`);
+      // Add index for workspace_id filtering
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_conversations_workspace_id ON conversations(workspace_id);`);
+      console.log('[Migration v7] Added workspace_id column to conversations table');
+    } else {
+      console.log('[Migration v7] workspace_id column already exists, skipping');
+    }
+  },
+  down: (db) => {
+    // SQLite doesn't support DROP COLUMN directly, need to recreate table
+    db.exec(`
+      CREATE TABLE conversations_backup AS SELECT id, user_id, name, type, extra, model, status, created_at, updated_at FROM conversations;
+      DROP TABLE conversations;
+      ALTER TABLE conversations_backup RENAME TO conversations;
+      CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
+      CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at);
+      CREATE INDEX IF NOT EXISTS idx_conversations_type ON conversations(type);
+      CREATE INDEX IF NOT EXISTS idx_conversations_user_updated ON conversations(user_id, updated_at DESC);
+    `);
+    console.log('[Migration v7] Rolled back: Removed workspace_id column from conversations table');
+  },
+};
+
+/**
  * All migrations in order
  */
-export const ALL_MIGRATIONS: IMigration[] = [migration_v1, migration_v2, migration_v3, migration_v4, migration_v5, migration_v6];
+export const ALL_MIGRATIONS: IMigration[] = [migration_v1, migration_v2, migration_v3, migration_v4, migration_v5, migration_v6, migration_v7];
 
 /**
  * Get migrations needed to upgrade from one version to another

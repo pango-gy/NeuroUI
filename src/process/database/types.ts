@@ -69,6 +69,7 @@ export interface IPaginatedResult<T> {
 export interface IConversationRow {
   id: string;
   user_id: string;
+  workspace_id?: string; // 브랜드(워크스페이스) ID
   name: string;
   type: 'gemini' | 'acp' | 'codex';
   extra: string; // JSON string of extra data
@@ -110,10 +111,11 @@ export interface IConfigRow {
 /**
  * Convert TChatConversation to database row
  */
-export function conversationToRow(conversation: TChatConversation, userId: string): IConversationRow {
+export function conversationToRow(conversation: TChatConversation, userId: string, workspaceId?: string): IConversationRow {
   return {
     id: conversation.id,
     user_id: userId,
+    workspace_id: workspaceId,
     name: conversation.name,
     type: conversation.type,
     extra: JSON.stringify(conversation.extra),

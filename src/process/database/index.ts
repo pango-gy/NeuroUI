@@ -378,16 +378,16 @@ export class AionUIDatabase {
    * ==================
    */
 
-  createConversation(conversation: TChatConversation, userId?: string): IQueryResult<TChatConversation> {
+  createConversation(conversation: TChatConversation, userId?: string, workspaceId?: string): IQueryResult<TChatConversation> {
     try {
-      const row = conversationToRow(conversation, userId || this.defaultUserId);
+      const row = conversationToRow(conversation, userId || this.defaultUserId, workspaceId);
 
       const stmt = this.db.prepare(`
-        INSERT INTO conversations (id, user_id, name, type, extra, model, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO conversations (id, user_id, workspace_id, name, type, extra, model, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run(row.id, row.user_id, row.name, row.type, row.extra, row.model, row.status, row.created_at, row.updated_at);
+      stmt.run(row.id, row.user_id, row.workspace_id, row.name, row.type, row.extra, row.model, row.status, row.created_at, row.updated_at);
 
       return {
         success: true,
@@ -424,25 +424,30 @@ export class AionUIDatabase {
     }
   }
 
-  getUserConversations(userId?: string, page = 0, pageSize = 50): IPaginatedResult<TChatConversation> {
+  getUserConversations(userId?: string, page = 0, pageSize = 50, workspaceId?: string): IPaginatedResult<TChatConversation> {
     try {
       const finalUserId = userId || this.defaultUserId;
 
-      const countResult = this.db.prepare('SELECT COUNT(*) as count FROM conversations WHERE user_id = ?').get(finalUserId) as {
-        count: number;
-      };
+      // Build query based on whether workspaceId is provided
+      let countQuery = 'SELECT COUNT(*) as count FROM conversations WHERE user_id = ?';
+      let selectQuery = `
+        SELECT *
+        FROM conversations
+        WHERE user_id = ?`;
+      const params: (string | number)[] = [finalUserId];
 
-      const rows = this.db
-        .prepare(
-          `
-            SELECT *
-            FROM conversations
-            WHERE user_id = ?
-            ORDER BY updated_at DESC LIMIT ?
-            OFFSET ?
-          `
-        )
-        .all(finalUserId, pageSize, page * pageSize) as IConversationRow[];
+      if (workspaceId) {
+        countQuery += ' AND workspace_id = ?';
+        selectQuery += ' AND workspace_id = ?';
+        params.push(workspaceId);
+      }
+
+      selectQuery += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?';
+
+      const countResult = this.db.prepare(countQuery).get(...params) as { count: number };
+
+      const selectParams = [...params, pageSize, page * pageSize];
+      const rows = this.db.prepare(selectQuery).all(...selectParams) as IConversationRow[];
 
       return {
         data: rows.map(rowToConversation),
