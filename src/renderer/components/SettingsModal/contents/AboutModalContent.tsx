@@ -44,7 +44,7 @@ const AboutModalContent: React.FC = () => {
     },
     {
       title: t('settings.contactMe'),
-      url: 'mailto:neuro@pango-gy.com',
+      url: 'mailto:pango_dev@pango-gy.com',
       icon: <Right theme='outline' size='16' />,
     },
     {
