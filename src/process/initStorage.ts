@@ -46,7 +46,7 @@ const migrateLegacyData = async () => {
         try {
           return existsSync(newDir) && readdirSync(newDir).length === 0;
         } catch (error) {
-          console.warn('[AionUi] 경고: 마이그레이션 확인 중 새 디렉토리를 읽을 수 없음:', error);
+          console.warn('[Neuro] 경고: 마이그레이션 확인 중 새 디렉토리를 읽을 수 없음:', error);
           return false; // 마이그레이션 덮어쓰기 방지를 위해 비어있지 않다고 가정
         }
       })();
@@ -67,7 +67,7 @@ const migrateLegacyData = async () => {
           try {
             await fs.rm(oldDir, { recursive: true });
           } catch (cleanupError) {
-            console.warn('[AionUi] 원본 디렉토리 정리 실패, 수동으로 삭제해주세요:', oldDir, cleanupError);
+            console.warn('[Neuro] 원본 디렉토리 정리 실패, 수동으로 삭제해주세요:', oldDir, cleanupError);
           }
         }
       }
@@ -75,7 +75,7 @@ const migrateLegacyData = async () => {
       return true;
     }
   } catch (error) {
-    console.error('[AionUi] 데이터 마이그레이션 실패:', error);
+    console.error('[Neuro] 데이터 마이그레이션 실패:', error);
   }
 
   return false;
@@ -368,7 +368,7 @@ const getDefaultMcpServers = (): IMcpServer[] => {
 };
 
 const initStorage = async () => {
-  console.log('[AionUi] 스토리지 초기화 시작...');
+  console.log('[Neuro] 스토리지 초기화 시작...');
 
   // 1. 먼저 데이터 마이그레이션 실행 (디렉토리 생성 전에)
   await migrateLegacyData();
@@ -395,10 +395,10 @@ const initStorage = async () => {
     if (!existingMcpConfig || !Array.isArray(existingMcpConfig) || existingMcpConfig.length === 0) {
       const defaultServers = getDefaultMcpServers();
       await configFile.set('mcp.config', defaultServers);
-      console.log('[AionUi] 기본 MCP 서버 초기화 완료');
+      console.log('[Neuro] 기본 MCP 서버 초기화 완료');
     }
   } catch (error) {
-    console.error('[AionUi] 기본 MCP 서버 초기화 실패:', error);
+    console.error('[Neuro] 기본 MCP 서버 초기화 실패:', error);
   }
   // 5. 데이터베이스 초기화 (better-sqlite3)
   try {

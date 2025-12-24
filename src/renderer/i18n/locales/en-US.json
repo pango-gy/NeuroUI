@@ -1,4 +1,7 @@
 {
+  "app": {
+    "name": "Neuro"
+  },
   "common": {
     "send": "Send",
     "cancel": "Cancel",

@@ -1,4 +1,7 @@
 {
+  "app": {
+    "name": "Neuro"
+  },
   "common": {
     "send": "보내기",
     "cancel": "취소",

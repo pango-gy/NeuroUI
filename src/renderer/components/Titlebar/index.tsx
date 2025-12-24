@@ -19,7 +19,7 @@ const detectMac = () => typeof navigator !== 'undefined' && /mac/i.test(navigato
 
 const Titlebar: React.FC<TitlebarProps> = ({ workspaceAvailable }) => {
   const { t } = useTranslation();
-  const appTitle = useMemo(() => t('app.name', { defaultValue: 'AionUi' }), [t]);
+  const appTitle = useMemo(() => t('app.name', { defaultValue: 'Neuro' }), [t]);
   const [workspaceCollapsed, setWorkspaceCollapsed] = useState(true);
   const layout = useLayoutContext();
 
