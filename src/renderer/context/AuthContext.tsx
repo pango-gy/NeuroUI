@@ -1,6 +1,7 @@
 import { ipcBridge, mcpService } from '@/common';
 import type { IMcpServer } from '@/common/storage';
 import { ConfigStorage } from '@/common/storage';
+import type { Workspace } from '@/renderer/components/WorkspaceSelectModal';
 import WorkspaceSelectModal from '@/renderer/components/WorkspaceSelectModal';
 import { auth, db } from '@/renderer/config/firebase';
 import { onAuthStateChanged, signInWithCustomToken, signInWithEmailAndPassword, signOut } from 'firebase/auth';
@@ -38,9 +39,12 @@ interface AuthContextValue {
   login: (params: LoginParams) => Promise<LoginResult>;
   logout: () => Promise<void>;
   refresh: () => () => void;
-  loginWithGoogle: () => Promise<void>; // Google Deep Link 로그인 트리거
+  loginWithGoogle: () => Promise<void>;
   workspaceId: string | null;
   setWorkspaceId: (id: string | null) => void;
+  workspaces: Workspace[];
+  currentWorkspace: Workspace | null;
+  switchWorkspace: (id: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -52,6 +56,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [status, setStatus] = useState<AuthStatus>('checking');
   const [ready, setReady] = useState(false);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [needsWorkspaceSelection, setNeedsWorkspaceSelection] = useState(false);
   // 리스너 해제를 위한 ref
   const connectionUnsubscribeRef = useRef<(() => void) | null>(null);
@@ -76,6 +81,13 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             localStorage.removeItem(WORKSPACE_KEY);
             return;
           }
+
+          // 워크스페이스 목록을 상태로 저장 (브랜드 드롭다운용)
+          const workspaceList = workspaceSnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as Workspace[];
+          setWorkspaces(workspaceList);
 
           // 저장된 워크스페이스가 유효한지 확인
           const isValidSavedWorkspace = savedWorkspaceId && workspaceSnapshot.docs.some((doc) => doc.id === savedWorkspaceId);
@@ -479,12 +491,28 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       setUser(null);
       setStatus('unauthenticated');
       setWorkspaceId(null);
+      setWorkspaces([]);
       setNeedsWorkspaceSelection(false);
-      localStorage.removeItem(WORKSPACE_KEY); // 로그아웃 시 워크스페이스 선택 정보도 삭제
+      localStorage.removeItem(WORKSPACE_KEY);
     } catch (error) {
       console.error('Logout failed:', error);
     }
   }, []);
+
+  // 현재 선택된 워크스페이스 (브랜드)
+  const currentWorkspace = useMemo(() => {
+    return workspaces.find((w) => w.id === workspaceId) || null;
+  }, [workspaces, workspaceId]);
+
+  // 워크스페이스 (브랜드) 전환
+  const switchWorkspace = useCallback(
+    (id: string) => {
+      if (user) {
+        handleWorkspaceSelect(id);
+      }
+    },
+    [user]
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -497,8 +525,11 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       loginWithGoogle,
       workspaceId,
       setWorkspaceId,
+      workspaces,
+      currentWorkspace,
+      switchWorkspace,
     }),
-    [login, logout, ready, refresh, status, user, loginWithGoogle, workspaceId]
+    [login, logout, ready, refresh, status, user, loginWithGoogle, workspaceId, workspaces, currentWorkspace, switchWorkspace]
   );
 
   return (

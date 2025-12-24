@@ -1,11 +1,11 @@
-import { ArrowCircleLeft, Logout, Plus, SettingTwo } from '@icon-park/react';
+import { ArrowCircleLeft, Down, Logout, Plus, SettingTwo } from '@icon-park/react';
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ChatHistory from './pages/conversation/ChatHistory';
 import SettingsSider from './pages/settings/SettingsSider';
 import { iconColors } from './theme/colors';
-import { Tooltip } from '@arco-design/web-react';
+import { Dropdown, Menu, Tooltip } from '@arco-design/web-react';
 import { useAuth } from './context/AuthContext';
 
 interface SiderProps {
@@ -19,7 +19,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
 
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { logout, user } = useAuth();
+  const { logout, user, workspaces, currentWorkspace, switchWorkspace } = useAuth();
   const isSettings = pathname.startsWith('/settings');
   const lastNonSettingsPathRef = useRef('/guid');
 
@@ -51,8 +51,33 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     });
   };
 
+  // 브랜드 선택 드롭다운 메뉴
+  const brandMenu = (
+    <Menu onClickMenuItem={(key) => switchWorkspace(key)}>
+      {workspaces.map((ws) => (
+        <Menu.Item key={ws.id} className={ws.id === currentWorkspace?.id ? 'arco-menu-selected' : ''}>
+          {ws.name}
+        </Menu.Item>
+      ))}
+    </Menu>
+  );
+
   return (
     <div className='size-full flex flex-col'>
+      {/* 브랜드 선택 드롭다운 */}
+      {!isSettings && workspaces.length > 0 && (
+        <Dropdown droplist={brandMenu} trigger='click' position='bl'>
+          <div className='flex items-center justify-between px-12px py-8px hover:bg-hover rd-0.5rem mx-8px mb-8px cursor-pointer border border-solid border-[var(--color-border-2)]'>
+            <div className='flex flex-col min-w-0 flex-1'>
+              <span className='text-10px text-t-secondary collapsed-hidden'>{t('brand.current', { defaultValue: '현재 브랜드' })}</span>
+              <span className='text-t-primary font-500 truncate collapsed-hidden'>{currentWorkspace?.name || t('brand.select', { defaultValue: '브랜드 선택' })}</span>
+              {collapsed && <span className='text-t-primary text-12px'>{currentWorkspace?.name?.charAt(0) || '?'}</span>}
+            </div>
+            {!collapsed && <Down theme='outline' size='16' fill={iconColors.secondary} />}
+          </div>
+        </Dropdown>
+      )}
+
       {isSettings ? (
         <SettingsSider collapsed={collapsed}></SettingsSider>
       ) : (
@@ -77,18 +102,19 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
         </>
       )}
 
-      {/* 로그아웃 버튼 */}
-      <Tooltip disabled={!collapsed} content={user?.email ? `${t('common.logout')} (${user.email})` : t('common.logout')} position='right'>
-        <div onClick={handleLogout} className='flex items-center justify-start gap-10px px-12px py-8px hover:bg-hover rd-0.5rem cursor-pointer text-red-500'>
-          <Logout className='flex' theme='outline' size='24' fill='#ef4444' />
-          <span className='collapsed-hidden'>{t('common.logout')}</span>
+      {/* 설정 버튼 */}
+      <Tooltip disabled={!collapsed} content={isSettings ? t('common.back') : t('common.settings')} position='right'>
+        <div onClick={handleSettingsClick} className='flex items-center justify-start gap-10px px-12px py-8px hover:bg-hover rd-0.5rem cursor-pointer'>
+          {isSettings ? <ArrowCircleLeft className='flex' theme='outline' size='24' fill={iconColors.primary} /> : <SettingTwo className='flex' theme='outline' size='24' fill={iconColors.primary} />}
+          <span className='collapsed-hidden text-t-primary'>{isSettings ? t('common.back') : t('common.settings')}</span>
         </div>
       </Tooltip>
 
-      <Tooltip disabled={!collapsed} content={isSettings ? t('common.back') : t('common.settings')} position='right'>
-        <div onClick={handleSettingsClick} className='flex items-center justify-start gap-10px px-12px py-8px hover:bg-hover rd-0.5rem mb-8px cursor-pointer'>
-          {isSettings ? <ArrowCircleLeft className='flex' theme='outline' size='24' fill={iconColors.primary} /> : <SettingTwo className='flex' theme='outline' size='24' fill={iconColors.primary} />}
-          <span className='collapsed-hidden text-t-primary'>{isSettings ? t('common.back') : t('common.settings')}</span>
+      {/* 로그아웃 버튼 */}
+      <Tooltip disabled={!collapsed} content={user?.email ? `${t('common.logout')} (${user.email})` : t('common.logout')} position='right'>
+        <div onClick={handleLogout} className='flex items-center justify-start gap-10px px-12px py-8px hover:bg-hover rd-0.5rem mb-8px cursor-pointer text-red-500'>
+          <Logout className='flex' theme='outline' size='24' fill='#ef4444' />
+          <span className='collapsed-hidden'>{t('common.logout')}</span>
         </div>
       </Tooltip>
     </div>

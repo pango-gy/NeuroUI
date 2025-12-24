@@ -2,6 +2,10 @@
   "app": {
     "name": "Neuro"
   },
+  "brand": {
+    "current": "현재 브랜드",
+    "select": "브랜드 선택"
+  },
   "common": {
     "send": "보내기",
     "cancel": "취소",
