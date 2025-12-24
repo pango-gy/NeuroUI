@@ -1,7 +1,7 @@
-appId: com.aionui.app
-productName: AionUi
-executableName: AionUi
-copyright: Copyright © 2024 AionUi
+appId: com.pango-gy.neuro
+productName: Neuro
+executableName: Neuro
+copyright: Copyright © 2025 Pango
 
 asar:
   smartUnpack: true
@@ -70,7 +70,7 @@ extraResources:
 win:
   target:
     - nsis
-#    - msi
+    #    - msi
     - zip
   # icon: resources/app.ico  # Temporarily disabled - current ico is 32x32, need 256x256+
   artifactName: ${productName}-${version}-${os}-${arch}.${ext}
@@ -114,9 +114,9 @@ linux:
   description: ${description}
   desktop:
     entry:
-      Name: AionUi
+      Name: Neuro
       Comment: ${description}
-      Icon: aionui
+      Icon: neuro
       Categories: Office;Utility;
 
 npmRebuild: false
@@ -124,17 +124,17 @@ buildDependenciesFromSource: false
 nodeGypRebuild: false
 
 asarUnpack:
-  - "**/node_modules/better-sqlite3/**/*"
-  - "**/node_modules/bcrypt/**/*"
-  - "**/node_modules/node-pty/**/*"
-  - "**/node_modules/@mapbox/**/*"
-  - "**/node_modules/detect-libc/**/*"
-  - "**/node_modules/prebuild-install/**/*"
-  - "**/node_modules/node-gyp-build/**/*"
-  - "**/node_modules/bindings/**/*"
+  - '**/node_modules/better-sqlite3/**/*'
+  - '**/node_modules/bcrypt/**/*'
+  - '**/node_modules/node-pty/**/*'
+  - '**/node_modules/@mapbox/**/*'
+  - '**/node_modules/detect-libc/**/*'
+  - '**/node_modules/prebuild-install/**/*'
+  - '**/node_modules/node-gyp-build/**/*'
+  - '**/node_modules/bindings/**/*'
   # tree-sitter WASM files need to be unpacked for fs.readFile access
-  - "**/node_modules/web-tree-sitter/**/*"
-  - "**/node_modules/tree-sitter-bash/**/*"
+  - '**/node_modules/web-tree-sitter/**/*'
+  - '**/node_modules/tree-sitter-bash/**/*'
 
 compression: maximum
 removePackageScripts: true
@@ -143,6 +143,7 @@ electronDownload:
 
 publish:
   provider: github
-  owner: ${env.GITHUB_REPOSITORY_OWNER:-aionui}
-  repo: ${env.GITHUB_REPOSITORY_NAME:-AionUi}
-  publishAutoUpdate: false
+  owner: pango-gy
+  repo: NeuroUI
+  releaseType: release
+  publishAutoUpdate: true
