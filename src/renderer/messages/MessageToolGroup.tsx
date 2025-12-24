@@ -192,16 +192,16 @@ const ConfirmationDetails: React.FC<{
         {/* 옵션 리스트 - 컴팩트하고 체크 피드백 강화 */}
         <div className='flex flex-col gap-6px'>
           {options.map((item) => (
-            <div key={item.value} className={`p-10px rd-10px border border-solid cursor-pointer transition-all duration-150 ${selected === item.value ? 'border-[rgb(var(--primary-5))] bg-[rgba(var(--primary-5),0.1)] scale-[1.01]' : 'border-[var(--border-2)] hover:border-[var(--border-3)] hover:bg-[var(--fill-2)]'}`} onClick={() => setSelected(item.value)}>
+            <div key={item.value} className={`p-10px rd-10px border border-solid cursor-pointer transition-all duration-150 ${selected === item.value ? 'border-[#4D3CEA] bg-[rgba(77,60,234,0.08)] scale-[1.01]' : 'border-[var(--border-2)] hover:border-[var(--border-3)] hover:bg-[var(--fill-2)]'}`} onClick={() => setSelected(item.value)}>
               <div className='flex items-center gap-8px'>
-                <div className={`w-16px h-16px rd-full border-2 border-solid flex items-center justify-center flex-shrink-0 transition-all duration-150 ${selected === item.value ? 'border-[rgb(var(--primary-5))] bg-[rgb(var(--primary-5))]' : 'border-[var(--border-3)]'}`}>
+                <div className={`w-16px h-16px rd-full flex items-center justify-center flex-shrink-0 transition-all duration-150 ${selected === item.value ? 'bg-[#4D3CEA]' : 'border-2 border-solid border-[var(--border-3)]'}`}>
                   {selected === item.value && (
                     <svg width='10' height='10' viewBox='0 0 10 10' fill='none'>
                       <path d='M2 5L4 7L8 3' stroke='white' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round' />
                     </svg>
                   )}
                 </div>
-                <span className={`text-13px transition-colors duration-150 ${selected === item.value ? 'text-t-primary font-medium' : 'text-t-primary'}`}>{item.label}</span>
+                <span className={`text-13px transition-colors duration-150 ${selected === item.value ? 'text-[#4D3CEA] font-medium' : 'text-t-primary'}`}>{item.label}</span>
               </div>
             </div>
           ))}
