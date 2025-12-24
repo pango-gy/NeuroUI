@@ -1,13 +1,13 @@
 /**
  * Gemini 연결 안내 배너 컴포넌트
- * Gemini CLI 미연결 시 채팅 입력창 위에 표시
+ * Gemini API 키 미설정 시 채팅 입력창 위에 표시
  */
 
 import { Button } from '@arco-design/web-react';
 import { Caution } from '@icon-park/react';
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ipcBridge } from '@/common';
+import { useNavigate } from 'react-router-dom';
 
 interface GeminiConnectionBannerProps {
   visible?: boolean;
@@ -16,20 +16,12 @@ interface GeminiConnectionBannerProps {
 
 const GeminiConnectionBanner: React.FC<GeminiConnectionBannerProps> = ({ visible = true, onDismiss }) => {
   const { t } = useTranslation();
-  const [isConnecting, setIsConnecting] = useState(false);
+  const navigate = useNavigate();
 
-  // Gemini 로그인 페이지 열기
-  const handleConnect = useCallback(async () => {
-    setIsConnecting(true);
-    try {
-      // Google AI Studio 페이지 열기 (API 키 발급 안내)
-      await ipcBridge.shell.openExternal.invoke('https://aistudio.google.com/apikey');
-    } catch (error) {
-      console.error('[GeminiConnectionBanner] Failed to open Gemini auth:', error);
-    } finally {
-      setIsConnecting(false);
-    }
-  }, []);
+  // 설정 > 모델 페이지로 이동
+  const handleGoToSettings = () => {
+    void navigate('/settings/model');
+  };
 
   if (!visible) {
     return null;
@@ -42,8 +34,8 @@ const GeminiConnectionBanner: React.FC<GeminiConnectionBannerProps> = ({ visible
         <span className='text-14px text-[var(--color-warning-6)]'>{t('gemini.connectionRequired', { defaultValue: 'Gemini API 키가 필요합니다' })}</span>
       </div>
       <div className='flex items-center gap-8px'>
-        <Button type='outline' size='small' loading={isConnecting} onClick={handleConnect} className='!rd-6px'>
-          {t('gemini.getApiKey', { defaultValue: 'API 키 발급' })}
+        <Button type='outline' size='small' onClick={handleGoToSettings} className='!rd-6px'>
+          {t('gemini.goToSettings', { defaultValue: '설정으로 이동' })}
         </Button>
         {onDismiss && (
           <Button type='text' size='small' onClick={onDismiss} className='!rd-6px'>

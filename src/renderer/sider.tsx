@@ -67,13 +67,13 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
       {/* 브랜드 선택 드롭다운 */}
       {!isSettings && workspaces.length > 0 && (
         <Dropdown droplist={brandMenu} trigger='click' position='bl'>
-          <div className='flex items-center justify-between px-12px py-8px hover:bg-hover rd-0.5rem mx-8px mb-8px cursor-pointer border border-solid border-[var(--color-border-2)]'>
+          <div className='flex items-center justify-between px-12px py-12px hover:bg-[var(--color-primary-light-1)] rd-8px mx-4px mb-12px cursor-pointer bg-[var(--color-fill-2)] border border-solid border-[var(--color-border-2)]'>
             <div className='flex flex-col min-w-0 flex-1'>
-              <span className='text-10px text-t-secondary collapsed-hidden'>{t('brand.current', { defaultValue: '현재 브랜드' })}</span>
-              <span className='text-t-primary font-500 truncate collapsed-hidden'>{currentWorkspace?.name || t('brand.select', { defaultValue: '브랜드 선택' })}</span>
-              {collapsed && <span className='text-t-primary text-12px'>{currentWorkspace?.name?.charAt(0) || '?'}</span>}
+              <span className='text-11px text-t-secondary collapsed-hidden'>{t('brand.current', { defaultValue: '현재 브랜드' })}</span>
+              <span className='text-t-primary font-600 text-15px truncate collapsed-hidden'>{currentWorkspace?.name || t('brand.select', { defaultValue: '브랜드 선택' })}</span>
+              {collapsed && <span className='text-t-primary text-14px font-600'>{currentWorkspace?.name?.charAt(0) || '?'}</span>}
             </div>
-            {!collapsed && <Down theme='outline' size='16' fill={iconColors.secondary} />}
+            {!collapsed && <Down theme='outline' size='18' fill={iconColors.primary} />}
           </div>
         </Dropdown>
       )}
