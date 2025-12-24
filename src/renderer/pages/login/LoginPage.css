@@ -134,7 +134,7 @@ body.login-page-active {
 
 .login-page__header {
   text-align: center;
-  margin-bottom: 28px;
+  margin-bottom: 24px; /* Reduced margin */
 }
 
 .login-page__logo {
@@ -371,6 +371,80 @@ body.login-page-active {
 
 .login-page__footer-divider {
   color: #ddd;
+}
+
+.login-page__signup-link {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+  margin-left: 4px;
+  transition: all 0.2s;
+}
+
+.login-page__signup-link:hover {
+  color: #764ba2;
+  text-decoration: underline;
+}
+
+/* Social Login Styles */
+.login-page__social-login {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.login-page__google-btn {
+  width: 100%;
+  height: 44px;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.login-page__google-btn:hover {
+  background-color: #f8f9fa;
+  border-color: #ccc;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.login-page__google-btn:active {
+  background-color: #f1f3f4;
+  transform: translateY(1px);
+}
+
+.login-page__google-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.login-page__divider {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+  color: #999;
+  font-size: 13px;
+}
+
+.login-page__divider::before,
+.login-page__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: #eee;
+}
+
+.login-page__divider span {
+  padding: 0 12px;
 }
 
 @media (max-width: 600px) {

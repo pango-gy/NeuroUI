@@ -128,6 +128,7 @@
     "eventemitter3": "^5.0.1",
     "express": "^5.1.0",
     "express-rate-limit": "^7.5.1",
+    "firebase": "^12.7.0",
     "fix-path": "^4.0.0",
     "html-to-text": "^9.0.5",
     "i18next": "^23.7.16",

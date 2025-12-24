@@ -1,4 +1,4 @@
-import { ArrowCircleLeft, Plus, SettingTwo } from '@icon-park/react';
+import { ArrowCircleLeft, Logout, Plus, SettingTwo } from '@icon-park/react';
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -6,6 +6,7 @@ import ChatHistory from './pages/conversation/ChatHistory';
 import SettingsSider from './pages/settings/SettingsSider';
 import { iconColors } from './theme/colors';
 import { Tooltip } from '@arco-design/web-react';
+import { useAuth } from './context/AuthContext';
 
 interface SiderProps {
   onSessionClick?: () => void;
@@ -18,6 +19,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
 
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { logout, user } = useAuth();
   const isSettings = pathname.startsWith('/settings');
   const lastNonSettingsPathRef = useRef('/guid');
 
@@ -42,6 +44,13 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
       onSessionClick();
     }
   };
+
+  const handleLogout = () => {
+    logout().catch((error) => {
+      console.error('Logout failed:', error);
+    });
+  };
+
   return (
     <div className='size-full flex flex-col'>
       {isSettings ? (
@@ -55,7 +64,6 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
                 Promise.resolve(navigate('/guid')).catch((error) => {
                   console.error('Navigation failed:', error);
                 });
-                // 点击new chat后自动隐藏sidebar / Hide sidebar after starting new chat on mobile
                 if (onSessionClick) {
                   onSessionClick();
                 }
@@ -68,6 +76,15 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
           <ChatHistory collapsed={collapsed} onSessionClick={onSessionClick}></ChatHistory>
         </>
       )}
+
+      {/* 로그아웃 버튼 */}
+      <Tooltip disabled={!collapsed} content={user?.email ? `${t('common.logout')} (${user.email})` : t('common.logout')} position='right'>
+        <div onClick={handleLogout} className='flex items-center justify-start gap-10px px-12px py-8px hover:bg-hover rd-0.5rem cursor-pointer text-red-500'>
+          <Logout className='flex' theme='outline' size='24' fill='#ef4444' />
+          <span className='collapsed-hidden'>{t('common.logout')}</span>
+        </div>
+      </Tooltip>
+
       <Tooltip disabled={!collapsed} content={isSettings ? t('common.back') : t('common.settings')} position='right'>
         <div onClick={handleSettingsClick} className='flex items-center justify-start gap-10px px-12px py-8px hover:bg-hover rd-0.5rem mb-8px cursor-pointer'>
           {isSettings ? <ArrowCircleLeft className='flex' theme='outline' size='24' fill={iconColors.primary} /> : <SettingTwo className='flex' theme='outline' size='24' fill={iconColors.primary} />}

@@ -96,6 +96,13 @@ export const googleAuth = {
   status: bridge.buildProvider<IBridgeResponse<{ account: string }>, { proxy?: string }>('google.auth.status'),
 };
 
+// Firebase 딥링크 인증 / Firebase deep link authentication
+export const auth = {
+  // 딥링크 이벤트를 Renderer로 전송하기 위한 Emitter
+  // Main 프로세스에서 neuro-gui://auth?token=... URL 수신 시 호출
+  deepLink: bridge.buildEmitter<{ type: string; token?: string }>('deep-link'),
+};
+
 // 订阅状态查询：用于动态决定是否展示 gemini-3-pro-preview / subscription check for Gemini models
 export const gemini = {
   subscriptionStatus: bridge.buildProvider<IBridgeResponse<{ isSubscriber: boolean; tier?: string; lastChecked: number; message?: string }>, { proxy?: string }>('gemini.subscription-status'),
@@ -130,6 +137,8 @@ export const mcpService = {
   loginMcpOAuth: bridge.buildProvider<IBridgeResponse<{ success: boolean; error?: string }>, { server: IMcpServer; config?: any }>('mcp.login-oauth'),
   logoutMcpOAuth: bridge.buildProvider<IBridgeResponse, string>('mcp.logout-oauth'),
   getAuthenticatedServers: bridge.buildProvider<IBridgeResponse<string[]>, void>('mcp.get-authenticated-servers'),
+  // 플랫폼 자격 증명(MCP Token) 업데이트 / Platform credentials (MCP Token) update
+  updatePlatformCredentials: bridge.buildProvider<IBridgeResponse, { token: string }>('mcp.update-platform-credentials'),
 };
 
 // Codex 对话相关接口 - 复用统一的conversation接口

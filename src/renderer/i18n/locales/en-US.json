@@ -41,7 +41,8 @@
     "unknownError": "Unknown error",
     "confirmDelete": "Confirm Delete",
     "deleteSuccess": "Deleted successfully",
-    "deleteFailed": "Failed to delete"
+    "deleteFailed": "Failed to delete",
+    "logout": "Logout"
   },
   "login": {
     "pageTitle": "AionUi - Sign In",

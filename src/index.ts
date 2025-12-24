@@ -5,7 +5,7 @@
  */
 
 import './utils/configureChromium';
-import { app, BrowserWindow, screen } from 'electron';
+import { app, BrowserWindow, screen, session } from 'electron';
 import fixPath from 'fix-path';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -52,9 +52,17 @@ process.on('uncaughtException', (_error) => {
 // 捕获未处理的 Promise 拒绝，避免应用崩溃
 // Catch unhandled Promise rejections to prevent app crashes
 process.on('unhandledRejection', (_reason, _promise) => {
-  // 可以在这里添加错误上报逻辑
-  // Error reporting logic can be added here
+  // 에러 리포팅 로직 추가 가능
 });
+
+// Deep Link 처리: 프로토콜 클라이언트 등록 (neuro-gui://...)
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('neuro-gui', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('neuro-gui');
+}
 
 const hasSwitch = (flag: string) => process.argv.includes(`--${flag}`) || app.commandLine.hasSwitch(flag);
 const getSwitchValue = (flag: string): string | undefined => {
@@ -151,7 +159,49 @@ const isResetPasswordMode = hasCommand('--resetpass');
 
 let mainWindow: BrowserWindow;
 
+// 딥링크 핸들러 함수
+const handleDeepLink = (url: string) => {
+  console.log(`[DeepLink] Received URL: ${url}`);
+
+  if (!mainWindow) return;
+
+  // URL 파싱 및 렌더러로 전송
+  try {
+    // neuro-gui://auth?token=...
+    const urlObj = new URL(url);
+    if (urlObj.protocol === 'neuro-gui:' && urlObj.host === 'auth') {
+      const token = urlObj.searchParams.get('token');
+      if (token) {
+        console.log('[DeepLink] Auth token found, sending to renderer');
+        // 렌더러 프로세스로 토큰 전달 (IPC 메시지 전송)
+        ipcBridge.auth.deepLink.emit({ type: 'auth', token });
+
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+      }
+    }
+  } catch (error) {
+    console.error('[DeepLink] Failed to parse URL:', error);
+  }
+};
+
+// macOS: open-url 이벤트
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
+
 const createWindow = (): void => {
+  // CSP 헤더 강제 설정 (Firebase Auth 허용)
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': ["default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://*.googleapis.com https://*.firebaseio.com https://*.firebase.com https://*.pango-gy.com; connect-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://*.googleapis.com https://*.firebaseio.com https://*.firebase.com https://*.pango-gy.com ws://localhost:* http://localhost:*"],
+      },
+    });
+  });
+
   // Get primary display size
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
@@ -165,7 +215,7 @@ const createWindow = (): void => {
     width: windowWidth,
     height: windowHeight,
     autoHideMenuBar: true,
-    // Custom titlebar configuration / 自定义标题栏配置
+    // Custom titlebar configuration
     ...(process.platform === 'darwin'
       ? {
           titleBarStyle: 'hidden',
@@ -174,7 +224,7 @@ const createWindow = (): void => {
       : { frame: false }),
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
-      webviewTag: true, // 启用 webview 标签用于 HTML 预览 / Enable webview tag for HTML preview
+      webviewTag: true, // HTML 미리보기를 위한 webview 태그 활성화
     },
   });
 
@@ -187,9 +237,7 @@ const createWindow = (): void => {
     // Error loading main window URL
   });
 
-  // 只在开发环境自动打开 DevTools / Only auto-open DevTools in development
-  // 使用 app.isPackaged 判断更可靠，打包后的应用不会自动打开 DevTools
-  // Using app.isPackaged is more reliable, packaged apps won't auto-open DevTools
+  // 개발 환경에서만 DevTools 자동 열기
   if (!app.isPackaged) {
     mainWindow.webContents.openDevTools();
   }
@@ -268,9 +316,29 @@ app.on('activate', () => {
 });
 
 app.on('before-quit', () => {
-  // 在应用退出前清理工作进程
+  // 앱 종료 전 워커 프로세스 정리
   WorkerManage.clear();
 });
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.
+// Windows: 단일 인스턴스 락 및 second-instance 이벤트
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, commandLine, _workingDirectory) => {
+    // 누군가 두 번째 인스턴스를 실행하려고 함 -> 메인 윈도우 포커스
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+
+      // 딥링크 URL 찾기
+      const url = commandLine.find((arg) => arg.startsWith('neuro-gui://'));
+      if (url) {
+        handleDeepLink(url);
+      }
+    }
+  });
+}
+
+// 이 파일에 앱의 나머지 메인 프로세스 코드를 포함할 수 있음

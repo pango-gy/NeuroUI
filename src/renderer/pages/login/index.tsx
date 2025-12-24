@@ -1,10 +1,10 @@
-import { ConfigStorage } from '@/common/storage';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import loginLogo from '@renderer/assets/logos/app.png';
+import googleLogo from '@renderer/assets/logos/google.svg';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import AppLoader from '../../components/AppLoader';
 import { useAuth } from '../../context/AuthContext';
-import loginLogo from '@renderer/assets/logos/app.png';
 import './LoginPage.css';
 
 type MessageState = {
@@ -12,33 +12,15 @@ type MessageState = {
   text: string;
 };
 
-const REMEMBER_ME_KEY = 'rememberMe';
-const REMEMBERED_USERNAME_KEY = 'rememberedUsername';
-const REMEMBERED_PASSWORD_KEY = 'rememberedPassword';
-
-// Simple obfuscation for stored credentials (not cryptographically secure, but prevents plain text storage)
-const obfuscate = (text: string): string => {
-  const encoded = btoa(encodeURIComponent(text));
-  return encoded.split('').reverse().join('');
-};
-
-const deobfuscate = (text: string): string => {
-  try {
-    const reversed = text.split('').reverse().join('');
-    return decodeURIComponent(atob(reversed));
-  } catch {
-    return '';
-  }
-};
+const REMEMBER_KEY = 'rememberedEmail';
 
 const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { status, login } = useAuth();
+  const { status, login, loginWithGoogle } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [message, setMessage] = useState<MessageState | null>(null);
   const [loading, setLoading] = useState(false);
@@ -66,17 +48,18 @@ const LoginPage: React.FC = () => {
   }, [i18n.language]);
 
   useEffect(() => {
-    const isRememberMe = localStorage.getItem(REMEMBER_ME_KEY) === 'true';
-    if (isRememberMe) {
-      const storedUsername = localStorage.getItem(REMEMBERED_USERNAME_KEY);
-      const storedPassword = localStorage.getItem(REMEMBERED_PASSWORD_KEY);
-      if (storedUsername) setUsername(deobfuscate(storedUsername));
-      if (storedPassword) setPassword(deobfuscate(storedPassword));
-      setRememberMe(true);
+    // Desktop app: Always restore remembered email until logout
+    const storedUsername = localStorage.getItem(REMEMBER_KEY);
+    if (storedUsername) {
+      setUsername(storedUsername);
+      window.setTimeout(() => {
+        passwordRef.current?.focus();
+      }, 0);
+    } else {
+      window.setTimeout(() => {
+        usernameRef.current?.focus();
+      }, 0);
     }
-    window.setTimeout(() => {
-      usernameRef.current?.focus();
-    }, 0);
 
     return () => {
       if (messageTimer.current) {
@@ -110,29 +93,6 @@ const LoginPage: React.FC = () => {
     [clearMessageLater]
   );
 
-  const supportedLanguages = useMemo(
-    () => [
-      { code: 'zh-CN', label: '简体中文' },
-      { code: 'zh-TW', label: '繁體中文' },
-      { code: 'ja-JP', label: '日本語' },
-      { code: 'en-US', label: 'English' },
-    ],
-    []
-  );
-
-  const handleLanguageChange = useCallback(
-    (event: React.ChangeEvent<HTMLSelectElement>) => {
-      const nextLanguage = event.target.value;
-      i18n.changeLanguage(nextLanguage).catch((error) => {
-        console.error('Failed to change language:', error);
-      });
-      ConfigStorage.set('language', nextLanguage).catch((error) => {
-        console.error('Failed to persist language preference:', error);
-      });
-    },
-    [i18n]
-  );
-
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
@@ -146,18 +106,11 @@ const LoginPage: React.FC = () => {
       setLoading(true);
       setMessage(null);
 
-      const result = await login({ username: trimmedUsername, password, remember: rememberMe });
+      const result = await login({ username: trimmedUsername, password, remember: true });
 
       if (result.success) {
-        if (rememberMe) {
-          localStorage.setItem(REMEMBER_ME_KEY, 'true');
-          localStorage.setItem(REMEMBERED_USERNAME_KEY, obfuscate(trimmedUsername));
-          localStorage.setItem(REMEMBERED_PASSWORD_KEY, obfuscate(password));
-        } else {
-          localStorage.removeItem(REMEMBER_ME_KEY);
-          localStorage.removeItem(REMEMBERED_USERNAME_KEY);
-          localStorage.removeItem(REMEMBERED_PASSWORD_KEY);
-        }
+        // Desktop app: Always save email for convenience until logout
+        localStorage.setItem(REMEMBER_KEY, trimmedUsername);
 
         const successText = t('login.success');
         showMessage({ type: 'success', text: successText });
@@ -187,8 +140,15 @@ const LoginPage: React.FC = () => {
 
       setLoading(false);
     },
-    [login, navigate, password, rememberMe, showMessage, t, username]
+    [login, navigate, password, showMessage, t, username]
   );
+
+  const handleGoogleLogin = useCallback(() => {
+    loginWithGoogle().catch((error) => {
+      console.error('Google login failed:', error);
+      showMessage({ type: 'error', text: t('login.errors.networkError') });
+    });
+  }, [loginWithGoogle, showMessage, t]);
 
   if (status === 'checking') {
     return <AppLoader />;
@@ -196,23 +156,7 @@ const LoginPage: React.FC = () => {
 
   return (
     <div className='login-page'>
-      {/* <div className='login-page__background' aria-hidden='true'>
-        <div className='login-page__background-circle login-page__background-circle--lg' />
-        <div className='login-page__background-circle login-page__background-circle--md' />
-        <div className='login-page__background-circle login-page__background-circle--sm' />
-      </div> */}
-
       <div className='login-page__card'>
-        {/* <label className='login-page__lang-select-wrapper' htmlFor='lang-select'>
-          <select id='lang-select' className='login-page__lang-select' value={i18n.language} onChange={handleLanguageChange}>
-            {supportedLanguages.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.label}
-              </option>
-            ))}
-          </select>
-        </label> */}
-
         <div className='login-page__header'>
           <div className='login-page__logo'>
             <img src={loginLogo} alt={t('login.brand')} />
@@ -221,17 +165,28 @@ const LoginPage: React.FC = () => {
           <p className='login-page__subtitle'>{t('login.subtitle')}</p>
         </div>
 
+        <div className='login-page__social-login'>
+          <button type='button' className='login-page__google-btn' onClick={handleGoogleLogin}>
+            <img src={googleLogo} alt='Google' className='login-page__google-icon' />
+            <span>{t('login.googleSignIn')}</span>
+          </button>
+        </div>
+
+        <div className='login-page__divider'>
+          <span>{t('login.divider')}</span>
+        </div>
+
         <form className='login-page__form' onSubmit={handleSubmit}>
           <div className='login-page__form-item'>
             <label className='login-page__label' htmlFor='username'>
-              {t('login.username')}
+              {t('login.email')}
             </label>
             <div className='login-page__input-wrapper'>
               <svg className='login-page__input-icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' aria-hidden='true'>
                 <path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' />
                 <circle cx='12' cy='7' r='4' />
               </svg>
-              <input ref={usernameRef} id='username' name='username' className='login-page__input' placeholder={t('login.usernamePlaceholder')} autoComplete='username' value={username} onChange={(event) => setUsername(event.target.value)} aria-required='true' />
+              <input ref={usernameRef} id='username' name='username' className='login-page__input' placeholder={t('login.emailPlaceholder')} autoComplete='username' value={username} onChange={(event) => setUsername(event.target.value)} aria-required='true' />
             </div>
           </div>
 
@@ -263,11 +218,6 @@ const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          <div className='login-page__checkbox'>
-            <input type='checkbox' id='remember-me' checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} />
-            <label htmlFor='remember-me'>{t('login.rememberMe')}</label>
-          </div>
-
           <button type='submit' className='login-page__submit' disabled={loading}>
             {loading && (
               <svg className='login-page__spinner' viewBox='0 0 24 24' width='18' height='18'>
@@ -285,8 +235,16 @@ const LoginPage: React.FC = () => {
         <div className='login-page__footer'>
           <div className='login-page__footer-content'>
             <span>{t('login.footerPrimary')}</span>
-            <span className='login-page__footer-divider'>•</span>
-            <span>{t('login.footerSecondary')}</span>
+            <a
+              href='#'
+              className='login-page__signup-link'
+              onClick={(e) => {
+                e.preventDefault();
+                window.open('https://neuro.pango-gy.com/signup', '_blank');
+              }}
+            >
+              {t('login.footerSecondary')}
+            </a>
           </div>
         </div>
       </div>

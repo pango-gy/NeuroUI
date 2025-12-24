@@ -10,9 +10,9 @@ import path from 'path';
 import { application } from '../common/ipcBridge';
 import type { IChatConversationRefer, IConfigStorageRefer, IEnvStorageRefer, IMcpServer } from '../common/storage';
 import { ChatMessageStorage, ChatStorage, ConfigStorage, EnvStorage } from '../common/storage';
-import { copyDirectoryRecursively, getConfigPath, getDataPath, getTempPath, verifyDirectoryFiles } from './utils';
 import { getDatabase } from './database/export';
-// Platform and architecture types (moved from deleted updateConfig)
+import { copyDirectoryRecursively, getConfigPath, getDataPath, getTempPath, verifyDirectoryFiles } from './utils';
+// 플랫폼 및 아키텍처 타입 (삭제된 updateConfig에서 이동)
 type PlatformType = 'win32' | 'darwin' | 'linux';
 type ArchitectureType = 'x64' | 'arm64' | 'ia32' | 'arm';
 
@@ -32,42 +32,42 @@ const mkdirSync = (path: string) => {
 };
 
 /**
- * 迁移老版本数据从temp目录到userData/config目录
+ * 이전 버전 데이터를 temp 디렉토리에서 userData/config 디렉토리로 마이그레이션
  */
 const migrateLegacyData = async () => {
-  const oldDir = getTempPath(); // 老的temp目录
-  const newDir = getConfigPath(); // 新的userData/config目录
+  const oldDir = getTempPath(); // 이전 temp 디렉토리
+  const newDir = getConfigPath(); // 새로운 userData/config 디렉토리
 
   try {
-    // 检查新目录是否为空（不存在或者存在但无内容）
+    // 새 디렉토리가 비어있는지 확인 (존재하지 않거나 내용이 없는 경우)
     const isNewDirEmpty =
       !existsSync(newDir) ||
       (() => {
         try {
           return existsSync(newDir) && readdirSync(newDir).length === 0;
         } catch (error) {
-          console.warn('[AionUi] Warning: Could not read new directory during migration check:', error);
-          return false; // 假设非空以避免迁移覆盖
+          console.warn('[AionUi] 경고: 마이그레이션 확인 중 새 디렉토리를 읽을 수 없음:', error);
+          return false; // 마이그레이션 덮어쓰기 방지를 위해 비어있지 않다고 가정
         }
       })();
 
-    // 检查迁移条件：老目录存在且新目录为空
+    // 마이그레이션 조건 확인: 이전 디렉토리가 존재하고 새 디렉토리가 비어있는 경우
     if (existsSync(oldDir) && isNewDirEmpty) {
-      // 创建目标目录
+      // 대상 디렉토리 생성
       mkdirSync(newDir);
 
-      // 复制所有文件和文件夹
+      // 모든 파일과 폴더 복사
       await copyDirectoryRecursively(oldDir, newDir);
 
-      // 验证迁移是否成功
+      // 마이그레이션 성공 여부 검증
       const isVerified = await verifyDirectoryFiles(oldDir, newDir);
       if (isVerified) {
-        // 确保不会删除相同的目录
+        // 동일한 디렉토리를 삭제하지 않도록 확인
         if (path.resolve(oldDir) !== path.resolve(newDir)) {
           try {
             await fs.rm(oldDir, { recursive: true });
           } catch (cleanupError) {
-            console.warn('[AionUi] 原目录清理失败，请手动删除:', oldDir, cleanupError);
+            console.warn('[AionUi] 원본 디렉토리 정리 실패, 수동으로 삭제해주세요:', oldDir, cleanupError);
           }
         }
       }
@@ -75,7 +75,7 @@ const migrateLegacyData = async () => {
       return true;
     }
   } catch (error) {
-    console.error('[AionUi] 数据迁移失败:', error);
+    console.error('[AionUi] 데이터 마이그레이션 실패:', error);
   }
 
   return false;
@@ -152,28 +152,28 @@ const JsonFileBuilder = <S extends Record<string, any>>(path: string) => {
       const result = await file.read();
       if (!result) return {} as S;
 
-      // 验证文件内容不为空且不是损坏的base64
+      // 파일 내용이 비어있지 않고 손상된 base64가 아닌지 검증
       if (result.trim() === '') {
-        console.warn(`[Storage] Empty file detected: ${path}`);
+        console.warn(`[Storage] 빈 파일 감지됨: ${path}`);
         return {} as S;
       }
 
       const decoded = decode(result);
       if (!decoded || decoded.trim() === '') {
-        console.warn(`[Storage] Empty or corrupted content after decode: ${path}`);
+        console.warn(`[Storage] 디코딩 후 비어있거나 손상된 내용: ${path}`);
         return {} as S;
       }
 
       const parsed = JSON.parse(decoded) as S;
 
-      // 额外验证：如果是聊天历史文件且解析结果为空对象，警告用户
+      // 추가 검증: 채팅 기록 파일이고 파싱 결과가 빈 객체인 경우 사용자에게 경고
       if (path.includes('chat.txt') && Object.keys(parsed).length === 0) {
-        console.warn(`[Storage] Chat history file appears to be empty: ${path}`);
+        console.warn(`[Storage] 채팅 기록 파일이 비어있는 것 같습니다: ${path}`);
       }
 
       return parsed;
     } catch (e) {
-      // console.error(`[Storage] Error reading/parsing file ${path}:`, e);
+      // console.error(`[Storage] 파일 읽기/파싱 에러 ${path}:`, e);
       return {} as S;
     }
   };
@@ -249,16 +249,16 @@ const configFile = JsonFileBuilder<IConfigStorageRefer>(path.join(cacheDir, STOR
 const _chatMessageFile = JsonFileBuilder(path.join(cacheDir, STORAGE_PATH.chatMessage));
 const _chatFile = JsonFileBuilder<IChatConversationRefer>(path.join(cacheDir, STORAGE_PATH.chat));
 
-// 创建带字段迁移的聊天历史代理
+// 필드 마이그레이션이 포함된 채팅 기록 프록시 생성
 const chatFile = {
   ..._chatFile,
   async get<K extends keyof IChatConversationRefer>(key: K): Promise<IChatConversationRefer[K]> {
     const data = await _chatFile.get(key);
 
-    // 特别处理 chat.history 的字段迁移
+    // chat.history의 필드 마이그레이션 특별 처리
     if (key === 'chat.history' && Array.isArray(data)) {
       return data.map((conversation: any) => {
-        // 迁移 model 字段：selectedModel -> useModel
+        // model 필드 마이그레이션: selectedModel -> useModel
         if (conversation.model && 'selectedModel' in conversation.model && !('useModel' in conversation.model)) {
           conversation.model = {
             ...conversation.model,
@@ -310,42 +310,70 @@ const conversationHistoryProxy = (options: typeof _chatMessageFile, dir: string)
 const chatMessageFile = conversationHistoryProxy(_chatMessageFile, cacheDir);
 
 /**
- * 创建默认的 MCP 服务器配置
+ * 기본 MCP 서버 설정 생성
  */
 const getDefaultMcpServers = (): IMcpServer[] => {
   const now = Date.now();
-  const defaultConfig = {
-    mcpServers: {
-      'chrome-devtools': {
+
+  const servers = [
+    {
+      name: 'chrome-devtools',
+      config: {
         command: 'npx',
         args: ['-y', 'chrome-devtools-mcp@latest'],
       },
+      transportType: 'stdio' as const,
     },
-  };
+    {
+      name: 'google-ads-mcp',
+      description: 'Google Ads MCP Server',
+      config: {
+        url: 'https://nsxl30kipc.execute-api.ap-northeast-2.amazonaws.com/dev/mcp',
+        headers: {
+          Authorization: 'Bearer <token>',
+        },
+      },
+      transportType: 'http' as const,
+    },
+  ];
 
-  return Object.entries(defaultConfig.mcpServers).map(([name, config], index) => ({
-    id: `mcp_default_${now}_${index}`,
-    name,
-    description: `Default MCP server: ${name}`,
-    enabled: false, // 默认不启用，让用户手动开启
-    transport: {
-      type: 'stdio' as const,
-      command: config.command,
-      args: config.args,
-    },
-    createdAt: now,
-    updatedAt: now,
-    originalJson: JSON.stringify({ [name]: config }, null, 2),
-  }));
+  return servers.map((server, index) => {
+    let transport: any;
+
+    if (server.transportType === 'stdio') {
+      transport = {
+        type: 'stdio',
+        command: server.config.command,
+        args: server.config.args,
+      };
+    } else {
+      transport = {
+        type: server.transportType,
+        url: server.config.url,
+        headers: server.config.headers,
+      };
+    }
+
+    return {
+      id: `mcp_default_${now}_${index}`,
+      name: server.name,
+      description: server.description || `기본 MCP 서버: ${server.name}`,
+      enabled: false,
+      transport,
+      createdAt: now,
+      updatedAt: now,
+      originalJson: JSON.stringify({ [server.name]: { ...server.config, type: server.transportType } }, null, 2),
+    };
+  });
 };
 
 const initStorage = async () => {
-  console.log('[AionUi] Starting storage initialization...');
+  console.log('[AionUi] 스토리지 초기화 시작...');
 
-  // 1. 先执行数据迁移（在任何目录创建之前）
+  // 1. 먼저 데이터 마이그레이션 실행 (디렉토리 생성 전에)
   await migrateLegacyData();
 
-  // 2. 创建必要的目录（迁移后再创建，确保迁移能正常进行）
+  // 2. 필요한 디렉토리 생성 (마이그레이션 후에 생성하여 정상적인 마이그레이션 보장)
   if (!existsSync(getHomePage())) {
     mkdirSync(getHomePage());
   }
@@ -353,30 +381,30 @@ const initStorage = async () => {
     mkdirSync(getDataPath());
   }
 
-  // 3. 初始化存储系统
+  // 3. 스토리지 시스템 초기화
   ConfigStorage.interceptor(configFile);
   ChatStorage.interceptor(chatFile);
   ChatMessageStorage.interceptor(chatMessageFile);
   EnvStorage.interceptor(envFile);
 
-  // 4. 初始化 MCP 配置（为所有用户提供默认配置）
+  // 4. MCP 설정 초기화 (모든 사용자에게 기본 설정 제공)
   try {
     const existingMcpConfig = await configFile.get('mcp.config').catch((): undefined => undefined);
 
-    // 仅当配置不存在或为空时，写入默认值（适用于新用户和老用户）
+    // 설정이 존재하지 않거나 비어있을 때만 기본값 작성 (신규 및 기존 사용자 모두 적용)
     if (!existingMcpConfig || !Array.isArray(existingMcpConfig) || existingMcpConfig.length === 0) {
       const defaultServers = getDefaultMcpServers();
       await configFile.set('mcp.config', defaultServers);
-      console.log('[AionUi] Default MCP servers initialized');
+      console.log('[AionUi] 기본 MCP 서버 초기화 완료');
     }
   } catch (error) {
-    console.error('[AionUi] Failed to initialize default MCP servers:', error);
+    console.error('[AionUi] 기본 MCP 서버 초기화 실패:', error);
   }
-  // 5. 初始化数据库（better-sqlite3）
+  // 5. 데이터베이스 초기화 (better-sqlite3)
   try {
     getDatabase();
   } catch (error) {
-    console.error('[InitStorage] Database initialization failed, falling back to file-based storage:', error);
+    console.error('[InitStorage] 데이터베이스 초기화 실패, 파일 기반 스토리지로 폴백:', error);
   }
 
   application.systemInfo.provider(() => {

@@ -12,8 +12,8 @@ import type { IMcpServer, TProviderWithModel } from '@/common/storage';
 import { ProcessConfig } from '@/process/initStorage';
 import { getDatabase } from '@process/database';
 import { addMessage, addOrUpdateMessage, nextTickToLocalFinish } from '../message';
+import { mcpService } from '../services/mcpServices/McpService';
 import BaseAgentManager from './BaseAgentManager';
-import { handlePreviewOpenEvent } from '../utils/previewUtils';
 
 // gemini agent管理器类
 export class GeminiAgentManager extends BaseAgentManager<{
@@ -86,12 +86,21 @@ export class GeminiAgentManager extends BaseAgentManager<{
   private async getMcpServers(): Promise<Record<string, any>> {
     try {
       const mcpServers = await ProcessConfig.get('mcp.config');
+      console.log('[GeminiAgentManager] Raw MCP servers count:', mcpServers?.length);
+
       if (!mcpServers || !Array.isArray(mcpServers)) {
         return {};
       }
 
       // 转换为 aioncli-core 期望的格式
       const mcpConfig: Record<string, any> = {};
+      const platformToken = mcpService.getPlatformCredentials();
+
+      // Debug: Log each server's filter status
+      mcpServers.forEach((server: IMcpServer) => {
+        console.log(`[GeminiAgentManager] Server: ${server.name}, enabled: ${server.enabled}, status: ${server.status}, transport: ${server.transport?.type}`);
+      });
+
       mcpServers
         .filter((server: IMcpServer) => server.enabled && server.status === 'connected') // 只使用启用且连接成功的服务器
         .forEach((server: IMcpServer) => {
@@ -104,8 +113,38 @@ export class GeminiAgentManager extends BaseAgentManager<{
               description: server.description,
             };
           }
+          // Streamable HTTP (SSE) 지원 - streamable_http 추가!
+          else if (server.transport.type === 'sse' || server.transport.type === 'http' || server.transport.type === 'streamable_http') {
+            // 헤더 처리: <token> 치환 로직 적용
+            const headers = { ...(server.transport.headers || {}) };
+            if (platformToken) {
+              for (const [key, value] of Object.entries(headers)) {
+                if (typeof value === 'string' && value.includes('<token>')) {
+                  headers[key] = value.replace('<token>', platformToken);
+                }
+              }
+            }
+
+            // aioncli-core는 httpUrl을 보고 StreamableHTTPClientTransport를 선택함
+            // url만 있으면 SSEClientTransport를 사용함
+            // streamable_http는 httpUrl, 나머지는 url 사용
+            if (server.transport.type === 'streamable_http') {
+              mcpConfig[server.name] = {
+                httpUrl: server.transport.url, // httpUrl 사용!
+                headers: headers,
+                description: server.description,
+              };
+            } else {
+              mcpConfig[server.name] = {
+                url: server.transport.url,
+                headers: headers,
+                description: server.description,
+              };
+            }
+          }
         });
 
+      console.log('[GeminiAgentManager] Final mcpConfig keys:', Object.keys(mcpConfig));
       return mcpConfig;
     } catch (error) {
       return {};
@@ -124,6 +163,16 @@ export class GeminiAgentManager extends BaseAgentManager<{
     };
     addMessage(this.conversation_id, message);
     this.status = 'pending';
+
+    // 즉시 start 이벤트를 emit하여 프론트엔드에서 스트리밍 인디케이터 표시
+    // Emit start event immediately so frontend shows streaming indicator
+    ipcBridge.geminiConversation.responseStream.emit({
+      type: 'start',
+      conversation_id: this.conversation_id,
+      msg_id: data.msg_id,
+      data: null,
+    });
+
     return this.bootstrap
       .catch((e) => {
         this.emit('gemini.message', {
@@ -147,23 +196,19 @@ export class GeminiAgentManager extends BaseAgentManager<{
     super.init();
     // 接受来子进程的对话消息
     this.on('gemini.message', (data) => {
+      // console.log('gemini.message', data);
       if (data.type === 'finish') {
         this.status = 'finished';
       }
       if (data.type === 'start') {
         this.status = 'running';
       }
-
-      // 处理预览打开事件（chrome-devtools 导航触发）/ Handle preview open event (triggered by chrome-devtools navigation)
-      if (handlePreviewOpenEvent(data)) {
-        return; // 不需要继续处理 / No need to continue processing
+      if (data.type === 'thought') {
+        this.status = 'running';
       }
-
       data.conversation_id = this.conversation_id;
       // Transform and persist message (skip transient UI state messages)
-      // 跳过 thought, finished 等不需要持久化的消息类型
-      const skipTransformTypes = ['thought', 'finished'];
-      if (!skipTransformTypes.includes(data.type)) {
+      if (data.type !== 'thought') {
         const tMessage = transformMessage(data as IResponseMessage);
         if (tMessage) {
           addOrUpdateMessage(this.conversation_id, tMessage, 'gemini');
@@ -175,6 +220,14 @@ export class GeminiAgentManager extends BaseAgentManager<{
 
   // 发送tools用户确认的消息
   confirmMessage(data: { confirmKey: string; msg_id: string; callId: string }) {
+    // 도구 실행 시작 전 start 이벤트를 emit하여 스트리밍 인디케이터 표시
+    // Emit start event before tool execution to show streaming indicator
+    ipcBridge.geminiConversation.responseStream.emit({
+      type: 'start',
+      conversation_id: this.conversation_id,
+      msg_id: data.msg_id,
+      data: null,
+    });
     return this.postMessagePromise(data.callId, data.confirmKey);
   }
 

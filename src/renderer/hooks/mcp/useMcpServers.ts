@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { ConfigStorage } from '@/common/storage';
 import type { IMcpServer } from '@/common/storage';
+import { ConfigStorage } from '@/common/storage';
+import { useCallback, useEffect, useState } from 'react';
 
 /**
  * MCP服务器状态管理Hook
@@ -11,15 +11,29 @@ export const useMcpServers = () => {
 
   // 加载MCP服务器配置
   useEffect(() => {
-    void ConfigStorage.get('mcp.config')
-      .then((data) => {
-        if (data) {
-          setMcpServers(data);
-        }
-      })
-      .catch((error) => {
-        console.error('[useMcpServers] Failed to load MCP config:', error);
-      });
+    const loadConfig = () => {
+      void ConfigStorage.get('mcp.config')
+        .then((data) => {
+          if (data) {
+            setMcpServers(data);
+          }
+        })
+        .catch((error) => {
+          console.error('[useMcpServers] Failed to load MCP config:', error);
+        });
+    };
+
+    loadConfig();
+
+    const handleConfigChanged = () => {
+      loadConfig();
+    };
+
+    window.addEventListener('mcp-config-changed', handleConfigChanged);
+
+    return () => {
+      window.removeEventListener('mcp-config-changed', handleConfigChanged);
+    };
   }, []);
 
   // 保存MCP服务器配置

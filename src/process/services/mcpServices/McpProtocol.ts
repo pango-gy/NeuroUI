@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { app } from 'electron';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import type { IMcpServer } from '@/common/storage';
 import type { AcpBackendAll } from '@/types/acpTypes';
 import { JSONRPC_VERSION } from '@/types/acpTypes';
-import type { IMcpServer } from '@/common/storage';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { exec } from 'child_process';
+import { app } from 'electron';
+import { promisify } from 'util';
 
 /**
  * MCP源类型 - 包括所有ACP后端和AionUi内置
@@ -448,8 +448,12 @@ export abstract class AbstractMcpAgent implements IMcpProtocol {
     try {
       // app imported statically
 
-      // 创建 Streamable HTTP 传输层
-      const streamableHttpTransport = new StreamableHTTPClientTransport(new URL(transport.url));
+      // 创建 Streamable HTTP 传输层 (헤더 포함!)
+      const streamableHttpTransport = new StreamableHTTPClientTransport(new URL(transport.url), {
+        requestInit: {
+          headers: transport.headers || {},
+        },
+      });
 
       // 创建 MCP 客户端
       mcpClient = new Client(

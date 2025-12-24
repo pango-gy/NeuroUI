@@ -106,4 +106,17 @@ export function initMcpBridge(): void {
       };
     }
   });
+
+  // Platform Credentials (MCP Token) 업데이트
+  ipcBridge.mcpService.updatePlatformCredentials.provider(({ token }) => {
+    try {
+      mcpService.updatePlatformCredentials(token);
+      return Promise.resolve({ success: true });
+    } catch (error) {
+      return Promise.resolve({
+        success: false,
+        msg: error instanceof Error ? error.message : 'Unknown error updating platform credentials',
+      });
+    }
+  });
 }

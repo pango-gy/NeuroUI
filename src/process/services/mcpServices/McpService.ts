@@ -5,15 +5,15 @@
  */
 
 import { execSync } from 'child_process';
-import type { AcpBackend } from '../../../types/acpTypes';
 import type { IMcpServer } from '../../../common/storage';
-import { ClaudeMcpAgent } from './agents/ClaudeMcpAgent';
-import { QwenMcpAgent } from './agents/QwenMcpAgent';
-import { IflowMcpAgent } from './agents/IflowMcpAgent';
-import { GeminiMcpAgent } from './agents/GeminiMcpAgent';
+import type { AcpBackend } from '../../../types/acpTypes';
+import type { DetectedMcpServer, IMcpProtocol, McpConnectionTestResult, McpSource, McpSyncResult } from './McpProtocol';
 import { AionuiMcpAgent } from './agents/AionuiMcpAgent';
+import { ClaudeMcpAgent } from './agents/ClaudeMcpAgent';
 import { CodexMcpAgent } from './agents/CodexMcpAgent';
-import type { IMcpProtocol, DetectedMcpServer, McpConnectionTestResult, McpSyncResult, McpSource } from './McpProtocol';
+import { GeminiMcpAgent } from './agents/GeminiMcpAgent';
+import { IflowMcpAgent } from './agents/IflowMcpAgent';
+import { QwenMcpAgent } from './agents/QwenMcpAgent';
 
 /**
  * MCP服务 - 负责协调各个Agent的MCP操作协议
@@ -25,6 +25,7 @@ import type { IMcpProtocol, DetectedMcpServer, McpConnectionTestResult, McpSyncR
  */
 export class McpService {
   private agents: Map<McpSource, IMcpProtocol>;
+  private mcpToken: string | null = null; // 메모리에 MCP 토큰 저장
 
   constructor() {
     this.agents = new Map([
@@ -42,6 +43,60 @@ export class McpService {
    */
   private getAgent(backend: McpSource): IMcpProtocol | undefined {
     return this.agents.get(backend);
+  }
+
+  /**
+   * Platform Credentials (MCP Token) 업데이트
+   * Renderer로부터 받은 JWT 토큰을 메모리에 저장합니다.
+   */
+  updatePlatformCredentials(token: string): void {
+    this.mcpToken = token;
+    console.log('[McpService] Updated platform credentials (token stored in memory)');
+  }
+
+  /**
+   * 저장된 Platform Credentials (MCP Token) 가져오기
+   * GeminiAgentManager 등에서 호출하여 사용
+   */
+  getPlatformCredentials(): string | null {
+    return this.mcpToken;
+  }
+
+  /**
+   * 헬퍼 메서드: MCP 서버 설정에 토큰 주입
+   * 헤더에 <token> 플레이스홀더가 있으면 메모리에 저장된 실제 토큰으로 교체합니다.
+   */
+  private injectCredentials(server: IMcpServer): IMcpServer {
+    const token = this.getPlatformCredentials();
+    if (!token) return server;
+
+    // transport 타입에 따라 헤더 확인
+    if (server.transport.type === 'http' || server.transport.type === 'sse' || server.transport.type === 'streamable_http') {
+      const headers = server.transport.headers;
+      if (headers) {
+        let headersChanged = false;
+        const newHeaders = { ...headers };
+
+        for (const [key, value] of Object.entries(newHeaders)) {
+          if (typeof value === 'string' && value.includes('<token>')) {
+            newHeaders[key] = value.replace('<token>', token);
+            headersChanged = true;
+          }
+        }
+
+        if (headersChanged) {
+          return {
+            ...server,
+            transport: {
+              ...server.transport,
+              headers: newHeaders,
+            },
+          };
+        }
+      }
+    }
+
+    return server;
   }
 
   /**
@@ -124,7 +179,9 @@ export class McpService {
     // 使用第一个可用的agent进行连接测试，因为测试逻辑在基类中是通用的
     const firstAgent = this.agents.values().next().value;
     if (firstAgent) {
-      return await firstAgent.testMcpConnection(server);
+      // 运行时动态注入认证信息
+      const serverWithAuth = this.injectCredentials(server);
+      return await firstAgent.testMcpConnection(serverWithAuth);
     }
     return { success: false, error: 'No agent available for connection testing' };
   }
@@ -147,19 +204,22 @@ export class McpService {
       return { success: true, results: [] };
     }
 
+    // 运行时动态注入认证信息到所有服务器配置
+    const serversWithAuth = enabledServers.map((server) => this.injectCredentials(server));
+
     // 并发执行所有agent的MCP同步
     const promises = agents.map(async (agent) => {
       try {
         const agentInstance = this.getAgent(agent.backend);
         if (!agentInstance) {
-          console.warn(`[McpService] Skipping MCP sync for unsupported backend: ${agent.backend}`);
           return {
             agent: agent.name,
-            success: true,
+            success: false,
+            error: `Unsupported agent backend: ${agent.backend}`,
           };
         }
 
-        const result = await agentInstance.installMcpServers(enabledServers);
+        const result = await agentInstance.installMcpServers(serversWithAuth);
         return {
           agent: agent.name,
           success: result.success,
@@ -197,10 +257,10 @@ export class McpService {
       try {
         const agentInstance = this.getAgent(agent.backend);
         if (!agentInstance) {
-          console.warn(`[McpService] Skipping MCP removal for unsupported backend: ${agent.backend}`);
           return {
             agent: `${agent.backend}:${agent.name}`,
-            success: true,
+            success: false,
+            error: `Unsupported agent backend: ${agent.backend}`,
           };
         }
 
