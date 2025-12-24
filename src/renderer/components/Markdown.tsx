@@ -180,8 +180,9 @@ const createInitStyle = (currentTheme = 'light', cssVars?: Record<string, string
   }
 
   .markdown-shadow-body {
-    word-break: break-word;
-    overflow-wrap: anywhere;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
   }
   .markdown-shadow-body>p:first-child
   {
