@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import AuthOnboardingCard from '@/renderer/components/AuthOnboardingCard';
+import { ConversationProvider } from '@/renderer/context/ConversationContext';
 import FlexFullContainer from '@renderer/components/FlexFullContainer';
 import MessageList from '@renderer/messages/MessageList';
 import { MessageListProvider, useMessageLstCache } from '@renderer/messages/hooks';
@@ -11,7 +13,6 @@ import HOC from '@renderer/utils/HOC';
 import React, { useEffect } from 'react';
 import LocalImageView from '../../../components/LocalImageView';
 import GeminiSendBox from './GeminiSendBox';
-import { ConversationProvider } from '@/renderer/context/ConversationContext';
 import type { GeminiModelSelection } from './useGeminiModelSelection';
 
 // GeminiChat 接收共享的模型选择状态，避免组件内重复管理
@@ -23,10 +24,14 @@ const GeminiChat: React.FC<{
 }> = ({ conversation_id, workspace, modelSelection }) => {
   useMessageLstCache(conversation_id);
   const updateLocalImage = LocalImageView.useUpdateLocalImage();
+  const { providers, currentModel } = modelSelection;
 
   useEffect(() => {
     updateLocalImage({ root: workspace });
   }, [workspace]);
+
+  // 没有可用的 provider 时显示引导卡片 / Show onboarding card when no providers available
+  const needsOnboarding = providers.length === 0 && !currentModel;
 
   return (
     <ConversationProvider value={{ conversationId: conversation_id, workspace, type: 'gemini' }}>
@@ -34,7 +39,7 @@ const GeminiChat: React.FC<{
         <FlexFullContainer>
           <MessageList className='flex-1'></MessageList>
         </FlexFullContainer>
-        <GeminiSendBox conversation_id={conversation_id} modelSelection={modelSelection}></GeminiSendBox>
+        {needsOnboarding ? <AuthOnboardingCard /> : <GeminiSendBox conversation_id={conversation_id} modelSelection={modelSelection}></GeminiSendBox>}
       </div>
     </ConversationProvider>
   );

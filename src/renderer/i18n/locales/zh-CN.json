@@ -40,6 +40,14 @@
     "deleteSuccess": "删除成功",
     "deleteFailed": "删除失败"
   },
+  "onboarding": {
+    "welcome": "开始与Neuro对话",
+    "description": "请先连接您的账户以使用AI助手。",
+    "googleLogin": "使用Google账号开始",
+    "apiKeySetup": "或使用API密钥设置",
+    "loginSuccess": "登录成功",
+    "loginFailed": "登录失败"
+  },
   "login": {
     "pageTitle": "AionUi - 登录",
     "brand": "AionUi",

@@ -142,6 +142,14 @@
     "deleteSuccess": "刪除成功",
     "deleteFailed": "刪除失敗"
   },
+  "onboarding": {
+    "welcome": "開始與Neuro對話",
+    "description": "請先連接您的帳戶以使用AI助手。",
+    "googleLogin": "使用Google帳號開始",
+    "apiKeySetup": "或使用API金鑰設定",
+    "loginSuccess": "登入成功",
+    "loginFailed": "登入失敗"
+  },
   "login": {
     "pageTitle": "AionUi - 登入",
     "brand": "AionUi",

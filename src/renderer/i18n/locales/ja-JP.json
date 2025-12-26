@@ -171,6 +171,14 @@
     "deleteSuccess": "削除に成功しました",
     "deleteFailed": "削除に失敗しました"
   },
+  "onboarding": {
+    "welcome": "Neuroと会話を始めましょう",
+    "description": "AIアシスタントを使用するには、まずアカウントを接続してください。",
+    "googleLogin": "Googleアカウントで開始",
+    "apiKeySetup": "またはAPIキーで設定",
+    "loginSuccess": "ログイン成功",
+    "loginFailed": "ログイン失敗"
+  },
   "login": {
     "pageTitle": "AionUi - ログイン",
     "brand": "AionUi",

@@ -51,6 +51,14 @@
     "deleteFailed": "Failed to delete",
     "logout": "Logout"
   },
+  "onboarding": {
+    "welcome": "Start chatting with Neuro",
+    "description": "Connect your account to start using the AI assistant.",
+    "googleLogin": "Start with Google Account",
+    "apiKeySetup": "or set up with API key",
+    "loginSuccess": "Login successful",
+    "loginFailed": "Login failed"
+  },
   "login": {
     "pageTitle": "Neuro - Sign In",
     "brand": "Neuro",
