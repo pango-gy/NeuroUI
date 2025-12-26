@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import AuthOnboardingCard from '@/renderer/components/AuthOnboardingCard';
-import { ConversationProvider } from '@/renderer/context/ConversationContext';
+import AuthOnboardingCard from '@renderer/components/AuthOnboardingCard';
 import FlexFullContainer from '@renderer/components/FlexFullContainer';
+import { ConversationProvider } from '@renderer/context/ConversationContext';
 import MessageList from '@renderer/messages/MessageList';
 import { MessageListProvider, useMessageLstCache } from '@renderer/messages/hooks';
 import HOC from '@renderer/utils/HOC';
