@@ -7,14 +7,14 @@ permissions:
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: [main, dev]
 
 jobs:
   # 代码质量检查
   code-quality:
     name: Code Quality
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -144,7 +144,7 @@ jobs:
 
       # macOS 代码签名证书安装
       - name: Setup macOS code signing (macOS only)
-        if: startsWith(matrix.platform, 'macos')  # Temporarily disable signing to speed up builds / 暂时关闭签名以加快构建
+        if: startsWith(matrix.platform, 'macos') # Temporarily disable signing to speed up builds / 暂时关闭签名以加快构建
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
@@ -152,22 +152,22 @@ jobs:
         run: |
           if [ -n "$BUILD_CERTIFICATE_BASE64" ]; then
             echo "Installing code signing certificate..."
-          
+
             # 创建证书文件
             echo $BUILD_CERTIFICATE_BASE64 | base64 --decode > certificate.p12
-          
+
             # 创建临时钥匙串
             security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
             security default-keychain -s build.keychain
             security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          
+
             # 导入证书
             security import certificate.p12 -k build.keychain -P "$P12_PASSWORD" -T /usr/bin/codesign
             security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
-          
+
             # 清理证书文件
             rm certificate.p12
-          
+
             echo "Certificate imported successfully"
           else
             echo "No certificate provided - building unsigned application"
@@ -183,7 +183,7 @@ jobs:
       - name: Rebuild native modules for Electron
         if: startsWith(matrix.platform, 'windows')
         shell: pwsh
-        continue-on-error: false  # 修复：原生模块重建失败应该中止构建
+        continue-on-error: false # 修复：原生模块重建失败应该中止构建
         run: |
           $electronVersion = "${{ steps.electron-version.outputs.version }}"
           $arch = "${{ matrix.arch }}"
@@ -292,6 +292,14 @@ jobs:
           npm_config_cache: ${{ runner.temp }}/.npm
           ELECTRON_CACHE: ${{ runner.temp }}/.cache/electron
           ELECTRON_BUILDER_CACHE: ${{ runner.temp }}/.cache/electron-builder
+          # Firebase configuration / Firebase 设置
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_DATABASE_URL: ${{ secrets.VITE_FIREBASE_DATABASE_URL }}
           # Signing & IDs / 签名与应用 ID 配置
           APP_ID: ${{ secrets.APP_ID }}
           appleId: ${{ secrets.APPLE_ID }}
@@ -326,6 +334,14 @@ jobs:
           npm_config_arch: ${{ matrix.arch }}
           # App ID configuration / 应用 ID 配置
           APP_ID: ${{ secrets.APP_ID }}
+          # Firebase configuration / Firebase 设置
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_DATABASE_URL: ${{ secrets.VITE_FIREBASE_DATABASE_URL }}
           # macOS signing configuration / macOS 签名配置
           appleId: ${{ secrets.APPLE_ID }}
           appleIdPassword: ${{ secrets.APPLE_ID_PASSWORD }}
@@ -417,8 +433,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-
-
   # 自动重试 workflow（当构建失败时）
   auto-retry-workflow:
     name: Auto Retry on Build Failure
@@ -482,12 +496,12 @@ jobs:
   create-tag:
     name: Create Tag from Branch
     runs-on: ubuntu-latest
-    needs: [ build ]
+    needs: [build]
     if: success() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
     outputs:
       tag_name: ${{ steps.create_tag.outputs.tag_name }}
       is_dev: ${{ steps.create_tag.outputs.is_dev }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -500,7 +514,7 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           COMMIT_SHORT=$(git rev-parse --short HEAD)
           BRANCH_NAME=${GITHUB_REF#refs/heads/}
-          
+
           # 根据分支确定 tag 格式
           if [ "$BRANCH_NAME" = "dev" ]; then
             TAG_NAME="v${VERSION}-dev-${COMMIT_SHORT}"
@@ -511,42 +525,42 @@ jobs:
             IS_DEV="false"
             echo "🚀 Production release: $TAG_NAME"
           fi
-          
+
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "is_dev=$IS_DEV" >> $GITHUB_OUTPUT
-          
+
           # 检查远程tag是否已存在
           if git ls-remote --tags origin | grep -q "refs/tags/$TAG_NAME$"; then
             if [ "$IS_DEV" = "false" ]; then
               # Main 分支：需要递增版本并修改 package.json
               echo "⚠️ Tag $TAG_NAME already exists, auto-incrementing version..."
-          
+
               if [[ $VERSION =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
                 MAJOR=${BASH_REMATCH[1]}
                 MINOR=${BASH_REMATCH[2]}
                 PATCH=${BASH_REMATCH[3]}
                 NEW_PATCH=$((PATCH + 1))
                 NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
-          
+
                 echo "📝 Updating package.json version to $NEW_VERSION"
-          
+
                 # 更新 package.json 版本号
                 npm version $NEW_VERSION --no-git-tag-version
-          
+
                 # 配置git用户信息
                 git config user.name "github-actions[bot]"
                 git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
                 # 提交版本更新
                 git add package.json package-lock.json
                 git commit -m "chore: bump version to $NEW_VERSION"
                 git remote set-url origin https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git
                 git push origin $BRANCH_NAME
-          
+
                 # 获取新的 commit ID
                 COMMIT_SHORT=$(git rev-parse --short HEAD)
                 TAG_NAME="v${NEW_VERSION}-${COMMIT_SHORT}"
-          
+
                 echo "🚀 New tag with updated version: $TAG_NAME"
                 echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
               else
@@ -560,11 +574,11 @@ jobs:
               exit 1
             fi
           fi
-          
+
           # 配置git用户信息（如果前面没配置）
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           # 创建并推送tag
           echo "Creating tag: $TAG_NAME"
           git tag $TAG_NAME
@@ -578,10 +592,10 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [ build, create-tag ]
+    needs: [build, create-tag]
     if: always() && needs.create-tag.result == 'success'
     environment: ${{ needs.create-tag.outputs.is_dev == 'true' && 'dev-release' || 'release' }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -592,7 +606,7 @@ jobs:
           TAG_NAME="${{ needs.create-tag.outputs.tag_name }}"
           IS_DEV="${{ needs.create-tag.outputs.is_dev }}"
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
-          
+
           if [ "$IS_DEV" = "true" ]; then
             echo "🔧 Creating development release: $TAG_NAME"
           else
