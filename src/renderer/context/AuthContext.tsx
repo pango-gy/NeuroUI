@@ -119,8 +119,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       let token: string | null = null;
       try {
         // DB 구조가 claims 맵 안에 데이터가 있는 형태임
-        // query by claims.userId (현재 로그인한 유저 ID 기준 - 더 확실함)
-        const mcpTokensQuery = query(collection(db, 'mcpTokens'), where('claims.userId', '==', uid), limit(1));
+        // query by claims.userId AND claims.workspaceId (워크스페이스별 격리)
+        const mcpTokensQuery = query(collection(db, 'mcpTokens'), where('claims.userId', '==', uid), where('claims.workspaceId', '==', selectedWorkspaceId), limit(1));
         const mcpTokenSnapshot = await getDocs(mcpTokensQuery);
 
         if (!mcpTokenSnapshot.empty) {
