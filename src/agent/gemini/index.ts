@@ -9,12 +9,11 @@ import { NavigationInterceptor } from '@/common/navigation';
 import type { TProviderWithModel } from '@/common/storage';
 import { uuid } from '@/common/utils';
 import { getProviderAuthType } from '@/common/utils/platformAuthType';
-import type { CompletedToolCall, Config, GeminiClient, ServerGeminiStreamEvent, ToolCall, ToolCallRequestInfo, Turn } from '@office-ai/aioncli-core';
-import { AuthType, CoreToolScheduler, FileDiscoveryService, sessionId, refreshServerHierarchicalMemory } from '@office-ai/aioncli-core';
+import type { CompletedToolCall, Config, GeminiCLIExtension, GeminiClient, ServerGeminiStreamEvent, ToolCall, ToolCallRequestInfo, Turn } from '@office-ai/aioncli-core';
+import { AuthType, CoreToolScheduler, FileDiscoveryService, refreshServerHierarchicalMemory, sessionId } from '@office-ai/aioncli-core';
 import { ApiKeyManager } from '../../common/ApiKeyManager';
 import { handleAtCommand } from './cli/atCommandProcessor';
 import { loadCliConfig } from './cli/config';
-import { loadExtensions } from './cli/extension';
 import type { Settings } from './cli/settings';
 import { loadSettings } from './cli/settings';
 import { ConversationToolConfig } from './cli/tools/conversation-tool-config';
@@ -169,10 +168,19 @@ export class GeminiAgent {
     // 初始化对话级别的工具配置
     await this.toolConfig.initializeForConversation(this.authType!);
 
-    const extensions = loadExtensions(path);
+    // [PERF] 채팅 시작 속도 개선을 위해 extensions 로딩 비활성화
+    // 앱은 ProcessConfig의 mcp.config에서만 MCP 서버를 로드함
+    // [PERF] Disabled extensions loading for faster chat startup
+    // App only loads MCP servers from ProcessConfig's mcp.config
+    const extensions: GeminiCLIExtension[] = [];
+
+    // [PERF] settings.json의 mcpServers도 비활성화
+    // [PERF] Also disable mcpServers from settings.json
+    const settingsWithoutMcp = { ...settings, mcpServers: {} };
+
     this.config = await loadCliConfig({
       workspace: path,
-      settings,
+      settings: settingsWithoutMcp,
       extensions,
       sessionId,
       proxy: this.proxy,
