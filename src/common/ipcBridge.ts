@@ -99,8 +99,8 @@ export const googleAuth = {
 // Firebase 딥링크 인증 / Firebase deep link authentication
 export const auth = {
   // 딥링크 이벤트를 Renderer로 전송하기 위한 Emitter
-  // Main 프로세스에서 neuro-gui://auth?token=... URL 수신 시 호출
-  deepLink: bridge.buildEmitter<{ type: string; token?: string }>('deep-link'),
+  // Main 프로세스에서 neuro-gui://auth?token=... 또는 neuro-gui://workspace/{id} URL 수신 시 호출
+  deepLink: bridge.buildEmitter<{ type: string; token?: string; workspaceId?: string }>('deep-link'),
 };
 
 // 订阅状态查询：用于动态决定是否展示 gemini-3-pro-preview / subscription check for Gemini models

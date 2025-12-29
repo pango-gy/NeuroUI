@@ -417,6 +417,16 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           console.log('Authenticating with Deep Link Token (Custom Token)...');
           // Custom Token으로 로그인
           signInWithCustomToken(auth, event.token).catch(console.error);
+        } else if (event && event.type === 'workspace' && event.workspaceId) {
+          console.log(`[DeepLink] Switching to workspace: ${event.workspaceId}`);
+          // 워크스페이스 전환 (로그인된 상태에서만 동작)
+          if (user) {
+            handleWorkspaceSelect(event.workspaceId);
+          } else {
+            // 로그인되지 않은 경우 localStorage에 저장하여 로그인 후 자동 선택
+            localStorage.setItem(WORKSPACE_KEY, event.workspaceId);
+            console.log('[DeepLink] User not logged in. Workspace ID saved for later.');
+          }
         }
       } catch (e) {
         console.error('Deep Link handling failed:', e);
