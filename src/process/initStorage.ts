@@ -328,12 +328,23 @@ const getDefaultMcpServers = (): IMcpServer[] => {
       name: 'google-ads-mcp',
       description: 'Google Ads MCP Server',
       config: {
-        url: 'https://nsxl30kipc.execute-api.ap-northeast-2.amazonaws.com/dev/mcp',
+        url: process.env.VITE_GOOGLE_ADS_MCP_URL || 'http://localhost:3001/google-ads/mcp',
         headers: {
           Authorization: 'Bearer <token>',
         },
       },
-      transportType: 'http' as const,
+      transportType: 'streamable_http' as const,
+    },
+    {
+      name: 'google-analytics-mcp',
+      description: 'Google Analytics MCP Server',
+      config: {
+        url: process.env.VITE_GOOGLE_ANALYTICS_MCP_URL || 'http://localhost:3001/google-analytics/mcp',
+        headers: {
+          Authorization: 'Bearer <token>',
+        },
+      },
+      transportType: 'streamable_http' as const,
     },
   ];
 
@@ -387,15 +398,25 @@ const initStorage = async () => {
   ChatMessageStorage.interceptor(chatMessageFile);
   EnvStorage.interceptor(envFile);
 
-  // 4. MCP 설정 초기화 (모든 사용자에게 기본 설정 제공)
+  // 4. MCP 설정 초기화 및 마이그레이션 (모든 사용자에게 기본 설정 제공)
   try {
     const existingMcpConfig = await configFile.get('mcp.config').catch((): undefined => undefined);
+    const defaultServers = getDefaultMcpServers();
 
-    // 설정이 존재하지 않거나 비어있을 때만 기본값 작성 (신규 및 기존 사용자 모두 적용)
     if (!existingMcpConfig || !Array.isArray(existingMcpConfig) || existingMcpConfig.length === 0) {
-      const defaultServers = getDefaultMcpServers();
+      // 신규 사용자: 기본 서버 전체 설정
       await configFile.set('mcp.config', defaultServers);
       console.log('[Neuro] 기본 MCP 서버 초기화 완료');
+    } else {
+      // 기존 사용자: 누락된 기본 서버만 추가 (마이그레이션)
+      const existingNames = new Set(existingMcpConfig.map((s: any) => s.name));
+      const missingServers = defaultServers.filter((s) => !existingNames.has(s.name));
+
+      if (missingServers.length > 0) {
+        const updatedConfig = [...existingMcpConfig, ...missingServers];
+        await configFile.set('mcp.config', updatedConfig);
+        console.log('[Neuro] 누락된 MCP 서버 추가:', missingServers.map((s) => s.name).join(', '));
+      }
     }
   } catch (error) {
     console.error('[Neuro] 기본 MCP 서버 초기화 실패:', error);
