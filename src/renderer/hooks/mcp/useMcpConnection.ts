@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
 import { mcpService } from '@/common/ipcBridge';
 import type { IMcpServer } from '@/common/storage';
+import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { globalMessageQueue } from './messageQueue';
 
 /**
@@ -79,9 +79,7 @@ export const useMcpConnection = (
           } else {
             // 更新服务器状态为错误，并禁用安装
             // 连接失败时自动设置 enabled=false，避免安装失败的服务
-            await updateServerStatus('error', {
-              enabled: false,
-            });
+            await updateServerStatus('error', { enabled: false });
             const errorMsg = truncateErrorMessage(result.error || t('settings.mcpError'));
             await globalMessageQueue.add(() => {
               message.error({ content: `${server.name}: ${errorMsg}`, duration: 5000 });
@@ -89,9 +87,7 @@ export const useMcpConnection = (
           }
         } else {
           // IPC调用失败，禁用安装
-          await updateServerStatus('error', {
-            enabled: false,
-          });
+          await updateServerStatus('error', { enabled: false });
           const errorMsg = truncateErrorMessage(response.msg || t('settings.mcpError'));
           await globalMessageQueue.add(() => {
             message.error({ content: `${server.name}: ${errorMsg}`, duration: 5000 });
@@ -99,9 +95,7 @@ export const useMcpConnection = (
         }
       } catch (error) {
         // 更新服务器状态为错误，禁用安装
-        await updateServerStatus('error', {
-          enabled: false,
-        });
+        await updateServerStatus('error', { enabled: false });
         const errorMsg = truncateErrorMessage(error instanceof Error ? error.message : t('settings.mcpError'));
         await globalMessageQueue.add(() => {
           message.error({ content: `${server.name}: ${errorMsg}`, duration: 5000 });

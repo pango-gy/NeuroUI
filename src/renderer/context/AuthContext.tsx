@@ -134,25 +134,44 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       // 웹 로그인 시 저장된 토큰을 mcpTokens 컬렉션에서 가져옵니다.
       let token: string | null = null;
       try {
-        // DB 구조가 claims 맵 안에 데이터가 있는 형태임
-        // query by claims.userId (현재 로그인한 유저 ID 기준 - 더 확실함)
-        const mcpTokensQuery = query(collection(db, 'mcpTokens'), where('claims.userId', '==', uid), limit(1));
+        // 현재 선택된 워크스페이스의 토큰을 조회 (workspaceId 기준!)
+        console.log('[Auth Debug] Querying mcpTokens with workspaceId ==', selectedWorkspaceId);
+        const mcpTokensQuery = query(collection(db, 'mcpTokens'), where('workspaceId', '==', selectedWorkspaceId), limit(1));
         const mcpTokenSnapshot = await getDocs(mcpTokensQuery);
 
         if (!mcpTokenSnapshot.empty) {
           const docData = mcpTokenSnapshot.docs[0].data();
-          console.log('!!! AUTH CHECK: Document Found !!!');
-          // DB 로그 확인 결과: token은 root에 있음, claims 안에는 userId 등이 있음.
+          console.log('[Auth Debug] Document data:', JSON.stringify(docData, null, 2));
           token = docData.token || docData.claims?.token;
 
-          console.log('[Auth] Retrieved MCP token from Firestore. Docs found:', mcpTokenSnapshot.size);
-          console.log('[Auth] MCP Token prefix:', token?.substring(0, 20));
+          console.log('[Auth Debug] Token length:', token?.length);
+          console.log('[Auth Debug] Token workspaceId:', docData.workspaceId);
+          console.log('[Auth Debug] Selected workspaceId:', selectedWorkspaceId);
+
+          // JWT 디코딩해서 payload 확인 (검증 없이)
+          if (token) {
+            try {
+              const [, payloadBase64] = token.split('.');
+              const payload = JSON.parse(atob(payloadBase64));
+              console.log('[Auth Debug] JWT Payload:', JSON.stringify(payload));
+            } catch (e) {
+              console.log('[Auth Debug] Failed to decode JWT:', e);
+            }
+          }
         } else {
-          console.warn('[Auth] No MCP token found for workspace:', selectedWorkspaceId);
-          console.warn('[Auth] Please verify document matches claims.workspaceId ==', selectedWorkspaceId);
-          if (auth.currentUser) {
+          console.warn('[Auth Debug] No mcpTokens document found for workspaceId:', selectedWorkspaceId);
+          // 폴백: userId로 다시 시도 (이전 버전 호환)
+          console.log('[Auth Debug] Fallback: trying with userId ==', uid);
+          const fallbackQuery = query(collection(db, 'mcpTokens'), where('claims.userId', '==', uid), where('workspaceId', '==', selectedWorkspaceId), limit(1));
+          const fallbackSnapshot = await getDocs(fallbackQuery);
+
+          if (!fallbackSnapshot.empty) {
+            const docData = fallbackSnapshot.docs[0].data();
+            token = docData.token || docData.claims?.token;
+            console.log('[Auth Debug] Fallback query found token');
+          } else if (auth.currentUser) {
             token = await auth.currentUser.getIdToken(true);
-            console.log('[Auth] Fallback: Generated Firebase ID Token');
+            console.log('[Auth Debug] Fallback: Using Firebase ID Token (THIS WILL FAIL MCP AUTH!)');
           }
         }
 

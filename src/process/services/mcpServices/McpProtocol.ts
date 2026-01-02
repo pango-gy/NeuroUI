@@ -451,7 +451,10 @@ export abstract class AbstractMcpAgent implements IMcpProtocol {
       // 创建 Streamable HTTP 传输层 (헤더 포함!)
       const streamableHttpTransport = new StreamableHTTPClientTransport(new URL(transport.url), {
         requestInit: {
-          headers: transport.headers || {},
+          headers: {
+            Accept: 'application/json, text/event-stream', // MCP 서버 필수 헤더
+            ...transport.headers,
+          },
         },
       });
 

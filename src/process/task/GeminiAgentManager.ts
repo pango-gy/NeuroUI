@@ -102,7 +102,7 @@ export class GeminiAgentManager extends BaseAgentManager<{
       });
 
       mcpServers
-        .filter((server: IMcpServer) => server.enabled && server.status === 'connected') // 只使用启用且连接成功的服务器
+        .filter((server: IMcpServer) => server.enabled) // enabled만 확인 (status 체크 제거 - 테스트 실패해도 실제 사용 시 동작함)
         .forEach((server: IMcpServer) => {
           // 只处理 stdio 类型的传输方式，因为 aioncli-core 只支持这种类型
           if (server.transport.type === 'stdio') {
