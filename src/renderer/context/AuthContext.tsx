@@ -280,7 +280,9 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
                     const currentAuthHeader = (existingServer.transport as any).headers?.Authorization;
                     const expectedAuthHeader = `Bearer ${token}`;
 
-                    if (existingServer.transport.type !== 'streamable_http' || currentAuthHeader !== expectedAuthHeader) {
+                    const currentUrl = (existingServer.transport as any).url;
+
+                    if (existingServer.transport.type !== 'streamable_http' || currentAuthHeader !== expectedAuthHeader || currentUrl !== platformConfig.url) {
                       console.log(`[Auth] Auto-correcting ${mcpName}: Updating transport/token`);
 
                       (existingServer.transport as any).type = 'streamable_http';
