@@ -1,4 +1,4 @@
-import { ipcBridge, mcpService } from '@/common';
+import { ipcBridge } from '@/common';
 import type { IMcpServer } from '@/common/storage';
 import { ConfigStorage } from '@/common/storage';
 import type { Workspace } from '@/renderer/components/WorkspaceSelectModal';
@@ -11,6 +11,22 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 type AuthStatus = 'checking' | 'authenticated' | 'unauthenticated';
 
 const WORKSPACE_KEY = 'selectedWorkspaceId';
+
+// MCP Platform Configuration - configurable via environment variables
+const MCP_PLATFORMS = {
+  'google-ads-mcp': {
+    platform: 'google_ads', // Firebase connections에서 사용하는 platform 값
+    url: process.env.VITE_GOOGLE_ADS_MCP_URL || 'http://localhost:3001/google-ads/mcp',
+    description: 'Google Ads MCP Server',
+  },
+  'google-analytics-mcp': {
+    platform: 'google_analytics',
+    url: process.env.VITE_GOOGLE_ANALYTICS_MCP_URL || 'http://localhost:3001/google-analytics/mcp',
+    description: 'Google Analytics MCP Server',
+  },
+} as const;
+
+type McpServerName = keyof typeof MCP_PLATFORMS;
 
 export interface AuthUser {
   id: string;
@@ -118,25 +134,44 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       // 웹 로그인 시 저장된 토큰을 mcpTokens 컬렉션에서 가져옵니다.
       let token: string | null = null;
       try {
-        // DB 구조가 claims 맵 안에 데이터가 있는 형태임
-        // query by claims.userId AND claims.workspaceId (워크스페이스별 격리)
-        const mcpTokensQuery = query(collection(db, 'mcpTokens'), where('claims.userId', '==', uid), where('claims.workspaceId', '==', selectedWorkspaceId), limit(1));
+        // 현재 선택된 워크스페이스의 토큰을 조회 (workspaceId 기준!)
+        console.log('[Auth Debug] Querying mcpTokens with workspaceId ==', selectedWorkspaceId);
+        const mcpTokensQuery = query(collection(db, 'mcpTokens'), where('workspaceId', '==', selectedWorkspaceId), limit(1));
         const mcpTokenSnapshot = await getDocs(mcpTokensQuery);
 
         if (!mcpTokenSnapshot.empty) {
           const docData = mcpTokenSnapshot.docs[0].data();
-          console.log('!!! AUTH CHECK: Document Found !!!');
-          // DB 로그 확인 결과: token은 root에 있음, claims 안에는 userId 등이 있음.
+          console.log('[Auth Debug] Document data:', JSON.stringify(docData, null, 2));
           token = docData.token || docData.claims?.token;
 
-          console.log('[Auth] Retrieved MCP token from Firestore. Docs found:', mcpTokenSnapshot.size);
-          console.log('[Auth] MCP Token prefix:', token?.substring(0, 20));
+          console.log('[Auth Debug] Token length:', token?.length);
+          console.log('[Auth Debug] Token workspaceId:', docData.workspaceId);
+          console.log('[Auth Debug] Selected workspaceId:', selectedWorkspaceId);
+
+          // JWT 디코딩해서 payload 확인 (검증 없이)
+          if (token) {
+            try {
+              const [, payloadBase64] = token.split('.');
+              const payload = JSON.parse(atob(payloadBase64));
+              console.log('[Auth Debug] JWT Payload:', JSON.stringify(payload));
+            } catch (e) {
+              console.log('[Auth Debug] Failed to decode JWT:', e);
+            }
+          }
         } else {
-          console.warn('[Auth] No MCP token found for workspace:', selectedWorkspaceId);
-          console.warn('[Auth] Please verify document matches claims.workspaceId ==', selectedWorkspaceId);
-          if (auth.currentUser) {
+          console.warn('[Auth Debug] No mcpTokens document found for workspaceId:', selectedWorkspaceId);
+          // 폴백: userId로 다시 시도 (이전 버전 호환)
+          console.log('[Auth Debug] Fallback: trying with userId ==', uid);
+          const fallbackQuery = query(collection(db, 'mcpTokens'), where('claims.userId', '==', uid), where('workspaceId', '==', selectedWorkspaceId), limit(1));
+          const fallbackSnapshot = await getDocs(fallbackQuery);
+
+          if (!fallbackSnapshot.empty) {
+            const docData = fallbackSnapshot.docs[0].data();
+            token = docData.token || docData.claims?.token;
+            console.log('[Auth Debug] Fallback query found token');
+          } else if (auth.currentUser) {
             token = await auth.currentUser.getIdToken(true);
-            console.log('[Auth] Fallback: Generated Firebase ID Token');
+            console.log('[Auth Debug] Fallback: Using Firebase ID Token (THIS WILL FAIL MCP AUTH!)');
           }
         }
 
@@ -152,7 +187,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         // 권한 에러 등이 발생해도 UI가 멈추지 않도록 예외 무시 (토큰 없이 진행)
       }
 
-      // 3. Google Ads 연결 확인 및 MCP 서버 활성화/비활성화 (실시간 리스너)
+      // 3. MCP 플랫폼 연결 확인 및 MCP 서버 활성화/비활성화 (실시간 리스너)
       try {
         // 기존 리스너 해제
         if (connectionUnsubscribeRef.current) {
@@ -163,198 +198,161 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
 
         if (!selectedWorkspaceId) return;
 
-        // 해당 워크스페이스의 connections 컬렉션 조회
-        const connectionsQuery = query(
-          collection(db, `workspaces/${selectedWorkspaceId}/connections`),
-          where('platform', '==', 'google_ads'),
-          limit(1) // 연결이 하나라도 있는지 확인
-        );
+        // 해당 워크스페이스의 모든 MCP 관련 connections 조회
+        const platformNames = Object.values(MCP_PLATFORMS).map((p) => p.platform);
+        const connectionsQuery = query(collection(db, `workspaces/${selectedWorkspaceId}/connections`), where('platform', 'in', platformNames));
 
         const unsubscribe = onSnapshot(connectionsQuery, async (snapshot) => {
           try {
-            // isActive 필드까지 확인
-            const hasGoogleAdsConnection = !snapshot.empty && snapshot.docs.some((doc) => doc.data().isActive === true);
+            // 활성화된 플랫폼 Set 생성
+            const activeConnections = new Set<string>();
+            snapshot.docs.forEach((doc) => {
+              const data = doc.data();
+              if (data.isActive === true) {
+                activeConnections.add(data.platform);
+              }
+            });
+
+            console.log('[Auth] Active platform connections:', Array.from(activeConnections));
 
             if (window.electronAPI) {
               // MCP 설정 읽기
               const mcpConfig = (await ConfigStorage.get('mcp.config')) as IMcpServer[];
               if (Array.isArray(mcpConfig)) {
                 let configChanged = false;
-                let targetServer: IMcpServer | undefined;
+                const updatedServers: IMcpServer[] = [];
 
+                // 1. 각 MCP 플랫폼에 대해 활성화/비활성화 처리
                 const newConfig = mcpConfig.map((server) => {
-                  if (server.name === 'google-ads-mcp') {
-                    targetServer = server;
-                    // Google Ads 연결이 있고 토큰도 유효하면 활성화
-                    const shouldEnable = hasGoogleAdsConnection && !!token;
+                  const platformConfig = MCP_PLATFORMS[server.name as McpServerName];
+                  if (platformConfig) {
+                    const hasConnection = activeConnections.has(platformConfig.platform);
+                    const shouldEnable = hasConnection && !!token;
+
                     if (server.enabled !== shouldEnable) {
                       configChanged = true;
                       server = { ...server, enabled: shouldEnable };
-                      targetServer = server;
+                      console.log(`[Auth] ${server.name} ${shouldEnable ? 'enabled' : 'disabled'}`);
+                    }
+
+                    if (shouldEnable) {
+                      updatedServers.push(server);
                     }
                   }
                   return server;
                 });
 
+                // 2. 누락된 MCP 서버 주입 (Self-Healing)
+                for (const [mcpName, platformConfig] of Object.entries(MCP_PLATFORMS)) {
+                  const hasConnection = activeConnections.has(platformConfig.platform);
+                  if (!hasConnection || !token) continue;
+
+                  const existingServer = newConfig.find((s) => s.name === mcpName);
+                  if (!existingServer) {
+                    console.log(`[Auth] Injecting missing default config for ${mcpName}`);
+                    const newServer = {
+                      id: `mcp_default_${Date.now()}_${mcpName.replace(/-/g, '_')}`,
+                      name: mcpName,
+                      description: platformConfig.description,
+                      enabled: true,
+                      status: 'connected',
+                      transport: {
+                        type: 'streamable_http',
+                        url: platformConfig.url,
+                        headers: { Authorization: `Bearer ${token}` },
+                      },
+                      originalJson: JSON.stringify({
+                        [mcpName]: {
+                          type: 'streamable_http',
+                          url: platformConfig.url,
+                          headers: { Authorization: `Bearer ${token}` },
+                        },
+                      }),
+                      createdAt: Date.now(),
+                      updatedAt: Date.now(),
+                    } as IMcpServer;
+
+                    newConfig.push(newServer);
+                    updatedServers.push(newServer);
+                    configChanged = true;
+                  } else {
+                    // 3. Auto-Correction: transport/token 업데이트
+                    const currentAuthHeader = (existingServer.transport as any).headers?.Authorization;
+                    const expectedAuthHeader = `Bearer ${token}`;
+
+                    if (existingServer.transport.type !== 'streamable_http' || currentAuthHeader !== expectedAuthHeader) {
+                      console.log(`[Auth] Auto-correcting ${mcpName}: Updating transport/token`);
+
+                      (existingServer.transport as any).type = 'streamable_http';
+                      if ('url' in existingServer.transport) {
+                        (existingServer.transport as any).url = platformConfig.url;
+                      }
+
+                      const transportAny = existingServer.transport as any;
+                      if (!transportAny.headers) transportAny.headers = {};
+                      transportAny.headers.Authorization = expectedAuthHeader;
+
+                      try {
+                        const json = JSON.parse(existingServer.originalJson || '{}');
+                        if (json[mcpName]) {
+                          json[mcpName].type = 'streamable_http';
+                          json[mcpName].headers = { Authorization: expectedAuthHeader };
+                          existingServer.originalJson = JSON.stringify(json);
+                        }
+                      } catch (e) {
+                        // ignore json parse error
+                      }
+
+                      if (!updatedServers.includes(existingServer)) {
+                        updatedServers.push(existingServer);
+                      }
+                      configChanged = true;
+                    }
+                  }
+                }
+
+                // 4. 설정 저장
                 if (configChanged) {
                   await ConfigStorage.set('mcp.config', newConfig);
                   window.dispatchEvent(new Event('mcp-config-changed'));
-                  console.log(`[Auth] google-ads-mcp ${hasGoogleAdsConnection && !!token ? 'enabled' : 'disabled'}`);
                 }
 
-                // check if google-ads-mcp exists
-                const existingAdsServer = newConfig.find((s) => s.name === 'google-ads-mcp');
-
-                // Self-Healing: If missing, inject it. If present but wrong transport, fix it.
-                if (!existingAdsServer && hasGoogleAdsConnection && !!token) {
-                  console.log('[Auth] Injecting missing default config for google-ads-mcp');
-                  const newServer = {
-                    id: `mcp_default_${Date.now()}_google_ads`,
-                    name: 'google-ads-mcp',
-                    description: 'Default MCP server: google-ads-mcp',
-                    enabled: true,
-                    status: 'connected', // GeminiAgentManager가 이 값으로 필터링하므로 필수!
-                    transport: {
-                      type: 'streamable_http',
-                      url: 'https://nsxl30kipc.execute-api.ap-northeast-2.amazonaws.com/dev/mcp',
-                      headers: { Authorization: `Bearer ${token}` },
-                    },
-                    originalJson: JSON.stringify({
-                      'google-ads-mcp': {
-                        type: 'streamable_http',
-                        url: 'https://nsxl30kipc.execute-api.ap-northeast-2.amazonaws.com/dev/mcp',
-                        headers: { Authorization: `Bearer ${token}` },
-                      },
-                    }),
-                    createdAt: Date.now(),
-                    updatedAt: Date.now(),
-                  } as IMcpServer;
-
-                  newConfig.push(newServer);
-                  targetServer = newServer;
-                  configChanged = true;
-
-                  // Save immediately for self-healing
-                  await ConfigStorage.set('mcp.config', newConfig);
-                  window.dispatchEvent(new Event('mcp-config-changed'));
-
-                  // 자동으로 연결 테스트하여 도구 목록 가져오기
-                  console.log('[Auth] Auto-testing connection for google-ads-mcp...');
+                // 5. 활성화된 MCP 서버들을 에이전트에 동기화
+                if (token && updatedServers.length > 0) {
+                  console.log(
+                    '[Auth] Syncing MCP credentials to agents:',
+                    updatedServers.map((s) => s.name)
+                  );
                   try {
-                    const testResult = await mcpService.testMcpConnection.invoke(newServer);
-                    if (testResult.success && testResult.data?.success && testResult.data?.tools) {
-                      // 도구 목록 업데이트
-                      newServer.tools = testResult.data.tools.map((tool: any) => ({ name: tool.name, description: tool.description }));
-                      newServer.lastConnected = Date.now();
-                      await ConfigStorage.set('mcp.config', newConfig);
-                      window.dispatchEvent(new Event('mcp-config-changed'));
-                      console.log('[Auth] google-ads-mcp tools loaded:', testResult.data.tools.length);
+                    const agentsResponse = await ipcBridge.acpConversation.getAvailableAgents.invoke();
+                    if (agentsResponse.success && agentsResponse.data) {
+                      const syncResponse = await ipcBridge.mcpService.syncMcpToAgents.invoke({
+                        mcpServers: updatedServers.filter((s) => s.enabled),
+                        agents: agentsResponse.data,
+                      });
+                      console.log('[Auth] MCP sync completed:', syncResponse);
                     }
-                  } catch (testError) {
-                    console.error('[Auth] Failed to test google-ads-mcp connection:', testError);
+                  } catch (syncError) {
+                    console.error('[Auth] Error during MCP sync:', syncError);
                   }
-                } else if (existingAdsServer && hasGoogleAdsConnection && !!token) {
-                  // Auto-Correction: Fix legacy/wrong transport type OR stale/invalid token
-                  const currentAuthHeader = (existingAdsServer.transport as any).headers?.Authorization;
-                  const expectedAuthHeader = `Bearer ${token}`;
-
-                  if (existingAdsServer.transport.type !== 'streamable_http' || currentAuthHeader !== expectedAuthHeader) {
-                    console.log('[Auth] Auto-correcting google-ads-mcp: Updating transport/token');
-
-                    // Update transport type
-                    (existingAdsServer.transport as any).type = 'streamable_http';
-
-                    // Update URL just in case
-                    if ('url' in existingAdsServer.transport) {
-                      (existingAdsServer.transport as any).url = 'https://nsxl30kipc.execute-api.ap-northeast-2.amazonaws.com/dev/mcp';
-                    }
-
-                    // Update Token (CRITICAL FIX)
-                    // Update Token (CRITICAL FIX)
-                    // Cast to any to avoid TS error about headers not existing on union type
-                    const transportAny = existingAdsServer.transport as any;
-                    if (!transportAny.headers) {
-                      transportAny.headers = {};
-                    }
-
-                    console.log('[Auth] Updating Authorization header. Token length:', token?.length);
-                    console.log('[Auth] Token prefix:', token?.substring(0, 20));
-                    console.log('[Auth] User metadata:', user?.id, user?.email);
-                    transportAny.headers.Authorization = expectedAuthHeader;
-
-                    // Update originalJson to match
-                    try {
-                      const json = JSON.parse(existingAdsServer.originalJson || '{}');
-                      if (json['google-ads-mcp']) {
-                        json['google-ads-mcp'].type = 'streamable_http';
-                        json['google-ads-mcp'].headers = { Authorization: expectedAuthHeader };
-                        existingAdsServer.originalJson = JSON.stringify(json);
-                      }
-                    } catch (e) {
-                      // ignore json parse error
-                    }
-
-                    targetServer = existingAdsServer;
-                    configChanged = true;
-
-                    // Save immediately for auto-correction
-                    await ConfigStorage.set('mcp.config', newConfig);
-                    window.dispatchEvent(new Event('mcp-config-changed'));
-
-                    // 자동으로 연결 테스트하여 도구 목록 가져오기
-                    console.log('[Auth] Auto-testing connection for google-ads-mcp (after correction)...');
-                    try {
-                      const testResult = await mcpService.testMcpConnection.invoke(existingAdsServer);
-                      if (testResult.success && testResult.data?.success && testResult.data?.tools) {
-                        existingAdsServer.tools = testResult.data.tools.map((tool: any) => ({ name: tool.name, description: tool.description }));
-                        existingAdsServer.lastConnected = Date.now();
-                        await ConfigStorage.set('mcp.config', newConfig);
-                        window.dispatchEvent(new Event('mcp-config-changed'));
-                        console.log('[Auth] google-ads-mcp tools reloaded:', testResult.data.tools.length);
-                      }
-                    } catch (testError) {
-                      console.error('[Auth] Failed to test google-ads-mcp connection:', testError);
-                    }
-                  } else {
-                    targetServer = existingAdsServer;
-                  }
-                } else if (!targetServer) {
-                  // If it wasn't injected above, try to find it again (though finding logic above covers this, this is for safety if logic changes)
-                  targetServer = newConfig.find((s) => s.name === 'google-ads-mcp');
                 }
 
-                if (token && targetServer) {
-                  // enabled 상태에 따라 동기화 또는 제거
-                  if (targetServer.enabled) {
-                    console.log('[Auth] Syncing MCP credentials to agents for google-ads-mcp...');
+                // 6. 비활성화된 MCP 서버들을 에이전트에서 제거
+                for (const [mcpName, platformConfig] of Object.entries(MCP_PLATFORMS)) {
+                  const hasConnection = activeConnections.has(platformConfig.platform);
+                  const server = newConfig.find((s) => s.name === mcpName);
+                  if (server && !server.enabled) {
+                    console.log(`[Auth] Removing ${mcpName} from agents`);
                     try {
                       const agentsResponse = await ipcBridge.acpConversation.getAvailableAgents.invoke();
                       if (agentsResponse.success && agentsResponse.data) {
-                        const syncResponse = await ipcBridge.mcpService.syncMcpToAgents.invoke({
-                          mcpServers: [targetServer],
+                        await ipcBridge.mcpService.removeMcpFromAgents.invoke({
+                          mcpServerName: mcpName,
                           agents: agentsResponse.data,
                         });
-                        console.log('[Auth] MCP sync completed:', syncResponse);
-                      } else {
-                        console.warn('[Auth] Failed to get available agents for MCP sync');
-                      }
-                    } catch (syncError) {
-                      console.error('[Auth] Error during MCP sync:', syncError);
-                    }
-                  } else {
-                    // enabled가 false인 경우 에이전트에서 제거
-                    console.log('[Auth] Removing google-ads-mcp from agents (connection not active or no token)...');
-                    try {
-                      const agentsResponse = await ipcBridge.acpConversation.getAvailableAgents.invoke();
-                      if (agentsResponse.success && agentsResponse.data) {
-                        const removeResponse = await ipcBridge.mcpService.removeMcpFromAgents.invoke({
-                          mcpServerName: 'google-ads-mcp',
-                          agents: agentsResponse.data,
-                        });
-                        console.log('[Auth] MCP removal completed:', removeResponse);
                       }
                     } catch (removeError) {
-                      console.error('[Auth] Error during MCP removal:', removeError);
+                      console.error(`[Auth] Error removing ${mcpName}:`, removeError);
                     }
                   }
                 }
@@ -368,7 +366,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         // 리스너 참조 저장
         connectionUnsubscribeRef.current = unsubscribe;
       } catch (e) {
-        console.error('[Auth] Failed to check Google Ads connection (step 3):', e);
+        console.error('[Auth] Failed to check MCP connections (step 3):', e);
         throw e;
       }
     } catch (error) {
@@ -417,6 +415,16 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           console.log('Authenticating with Deep Link Token (Custom Token)...');
           // Custom Token으로 로그인
           signInWithCustomToken(auth, event.token).catch(console.error);
+        } else if (event && event.type === 'workspace' && event.workspaceId) {
+          console.log(`[DeepLink] Switching to workspace: ${event.workspaceId}`);
+          // 워크스페이스 전환 (로그인된 상태에서만 동작)
+          if (user) {
+            handleWorkspaceSelect(event.workspaceId);
+          } else {
+            // 로그인되지 않은 경우 localStorage에 저장하여 로그인 후 자동 선택
+            localStorage.setItem(WORKSPACE_KEY, event.workspaceId);
+            console.log('[DeepLink] User not logged in. Workspace ID saved for later.');
+          }
         }
       } catch (e) {
         console.error('Deep Link handling failed:', e);
