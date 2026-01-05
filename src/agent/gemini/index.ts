@@ -275,8 +275,9 @@ export class GeminiAgent {
     });
   }
 
-  private handleMessage(stream: AsyncGenerator<ServerGeminiStreamEvent, Turn, unknown>, msg_id: string, abortController: AbortController): Promise<void> {
+  private handleMessage(stream: AsyncGenerator<ServerGeminiStreamEvent, Turn, unknown>, msg_id: string, abortController: AbortController): Promise<{ usageMetadata?: unknown }> {
     const toolCallRequests: ToolCallRequestInfo[] = [];
+    let capturedUsageMetadata: unknown = undefined;
 
     return processGeminiStreamEvents(stream, this.config, (data) => {
       if (data.type === 'tool_call_request') {
@@ -288,7 +289,10 @@ export class GeminiAgent {
         msg_id,
       });
     })
-      .then(async () => {
+      .then(async (result) => {
+        // Capture usageMetadata from the processed stream
+        capturedUsageMetadata = result.usageMetadata;
+
         if (toolCallRequests.length > 0) {
           // Emit preview_open for navigation tools, but don't block execution
           // 对导航工具发送 preview_open 事件，但不阻止执行
@@ -300,6 +304,8 @@ export class GeminiAgent {
           // 调度所有工具请求，包括 chrome-devtools
           await this.scheduler.schedule(toolCallRequests, abortController.signal);
         }
+
+        return { usageMetadata: capturedUsageMetadata };
       })
       .catch((e: unknown) => {
         const errorMessage = e instanceof Error ? e.message : JSON.stringify(e);
@@ -308,6 +314,8 @@ export class GeminiAgent {
           data: errorMessage,
           msg_id,
         });
+        // Return empty usageMetadata on error to satisfy return type
+        return { usageMetadata: undefined as unknown };
       });
   }
 
@@ -380,6 +388,13 @@ export class GeminiAgent {
         msg_id,
       });
       this.handleMessage(stream, msg_id, abortController)
+        .then((result) => {
+          this.onStreamEvent({
+            type: 'finish',
+            data: { usageMetadata: result?.usageMetadata },
+            msg_id,
+          });
+        })
         .catch((e: unknown) => {
           const errorMessage = e instanceof Error ? e.message : JSON.stringify(e);
           this.onStreamEvent({
@@ -387,11 +402,10 @@ export class GeminiAgent {
             data: errorMessage,
             msg_id,
           });
-        })
-        .finally(() => {
+          // Still send finish event on error (with no usageMetadata)
           this.onStreamEvent({
             type: 'finish',
-            data: '',
+            data: {},
             msg_id,
           });
         });

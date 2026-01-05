@@ -1,12 +1,12 @@
+import { Dropdown, Menu, Tooltip } from '@arco-design/web-react';
 import { ArrowCircleLeft, Down, Logout, Plus, SettingTwo } from '@icon-park/react';
 import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
 import ChatHistory from './pages/conversation/ChatHistory';
 import SettingsSider from './pages/settings/SettingsSider';
 import { iconColors } from './theme/colors';
-import { Dropdown, Menu, Tooltip } from '@arco-design/web-react';
-import { useAuth } from './context/AuthContext';
 
 interface SiderProps {
   onSessionClick?: () => void;
@@ -36,7 +36,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
         console.error('Navigation failed:', error);
       });
     } else {
-      Promise.resolve(navigate('/settings/gemini')).catch((error) => {
+      Promise.resolve(navigate('/settings/usage')).catch((error) => {
         console.error('Navigation failed:', error);
       });
     }

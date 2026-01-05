@@ -77,16 +77,44 @@ function getRateLimitMessage(authType?: AuthType, error?: unknown, userTier?: Us
 }
 
 export function parseAndFormatApiError(error: unknown, authType?: AuthType, userTier?: UserTierId, currentModel?: string, fallbackModel?: string): string {
+  // User-requested friendly Korean message for 4xx errors
+  // "Subscription ended. Please subscribe at Neuro website."
+  const SUBSCRIPTION_ERROR_MSG = `[구독 만료]: 구독 기간이 종료되어 서비스를 이용할 수 없습니다. 계속 이용하시려면 Neuro 웹사이트에서 구독을 갱신해 주세요.`;
+
+  const is4xxError = (code: number | string | undefined) => {
+    if (!code) return false;
+    const num = Number(code);
+    return !isNaN(num) && num >= 400 && num < 500;
+  };
+
   if (isStructuredError(error)) {
-    let text = `[API Error: ${error.message}]`;
-    if (error.status === 429) {
-      text += getRateLimitMessage(authType, error, userTier, currentModel, fallbackModel);
+    // Check for 4xx in structured error
+    if (is4xxError(error.status)) {
+      return SUBSCRIPTION_ERROR_MSG;
     }
+    // Also check string message for 401/403 keywords if status is missing/weird
+    if (typeof error.message === 'string' && (error.message.includes('401') || error.message.includes('403'))) {
+      return SUBSCRIPTION_ERROR_MSG;
+    }
+
+    let text = `[API Error: ${error.message}]`;
     return text;
+  }
+
+  // Check for Error object with message
+  if (error instanceof Error) {
+    if (error.message.includes('401') || error.message.includes('403')) {
+      return SUBSCRIPTION_ERROR_MSG;
+    }
   }
 
   // The error message might be a string containing a JSON object.
   if (typeof error === 'string') {
+    // Check for 401/403 in raw string first
+    if (error.includes('401') || error.includes('403')) {
+      return SUBSCRIPTION_ERROR_MSG;
+    }
+
     const jsonStart = error.indexOf('{');
     if (jsonStart === -1) {
       return `[API Error: ${error}]`; // Not a JSON error, return as is.
@@ -107,10 +135,13 @@ export function parseAndFormatApiError(error: unknown, authType?: AuthType, user
         } catch (_e) {
           // It's not a nested JSON error, so we just use the message as is.
         }
-        let text = `[API Error: ${finalMessage} (Status: ${parsedError.error.status})]`;
-        if (parsedError.error.code === 429) {
-          text += getRateLimitMessage(authType, parsedError, userTier, currentModel, fallbackModel);
+
+        // Handle ALL 4xx errors as Subscription Issue
+        if (is4xxError(parsedError.error.code) || is4xxError(parsedError.error.status)) {
+          return SUBSCRIPTION_ERROR_MSG;
         }
+
+        let text = `[API Error: ${finalMessage} (Status: ${parsedError.error.status})]`;
         return text;
       }
     } catch (_e) {

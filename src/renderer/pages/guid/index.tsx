@@ -18,22 +18,24 @@ import KimiLogo from '@/renderer/assets/logos/kimi.svg';
 import OpenCodeLogo from '@/renderer/assets/logos/opencode.svg';
 import QwenLogo from '@/renderer/assets/logos/qwen.svg';
 import FilePreview from '@/renderer/components/FilePreview';
+import { auth } from '@/renderer/config/firebase';
+import { useAuth } from '@/renderer/context/AuthContext';
 import { useLayoutContext } from '@/renderer/context/LayoutContext';
 import { useCompositionInput } from '@/renderer/hooks/useCompositionInput';
 import { useDragUpload } from '@/renderer/hooks/useDragUpload';
 import { useGeminiGoogleAuthModels } from '@/renderer/hooks/useGeminiGoogleAuthModels';
 import { usePasteService } from '@/renderer/hooks/usePasteService';
 import { formatFilesForMessage } from '@/renderer/hooks/useSendBoxFiles';
-import { allSupportedExts, type FileMetadata, getCleanFileNames } from '@/renderer/services/FileService';
+import { allSupportedExts, getCleanFileNames, type FileMetadata } from '@/renderer/services/FileService';
+import { ModelProvisioningService } from '@/renderer/services/ModelProvisioningService';
 import { iconColors } from '@/renderer/theme/colors';
 import { hasSpecificModelCapability } from '@/renderer/utils/modelCapabilities';
 import type { AcpBackend } from '@/types/acpTypes';
-import { Button, ConfigProvider, Dropdown, Input, Menu, Tooltip } from '@arco-design/web-react';
+import { Button, ConfigProvider, Dropdown, Input, Menu, Message, Tooltip } from '@arco-design/web-react';
 import { IconClose } from '@arco-design/web-react/icon';
-import { ArrowUp, FolderOpen, MenuFold, MenuUnfold, Plus, Robot, UploadOne } from '@icon-park/react';
+import { ArrowUp, FolderOpen, Plus, Robot, UploadOne } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '@/renderer/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import styles from './index.module.css';
@@ -116,7 +118,42 @@ const useModelList = () => {
     return allProviders.filter(hasAvailableModels);
   }, [geminiModelValues, isGoogleAuth, modelConfig]);
 
-  return { modelList, isGoogleAuth, geminiModeOptions };
+  // Managed Models Integration
+  const { user } = useAuth();
+  const [managedModels, setManagedModels] = useState<IProvider[]>([]);
+
+  useEffect(() => {
+    const loadManagedModels = async () => {
+      if (user && auth.currentUser) {
+        try {
+          const token = await auth.currentUser.getIdToken();
+          const models = await ModelProvisioningService.getProvisionedModels(token);
+          setManagedModels(models);
+        } catch (e: any) {
+          console.error('Failed to load managed models', e);
+          // [Managed Auth] Show Toast notification for subscription/authorization failure
+          // Note: Using hardcoded Korean strings since useTranslation is not available in this hook.
+          const errorMsg = e?.message?.includes('Subscription Error') ? '구독이 필요합니다. 결제를 진행해주세요.' : '모델을 불러오지 못했습니다. 네트워크를 확인해주세요.';
+          Message.error({
+            content: errorMsg,
+            duration: 5000,
+          });
+        }
+      } else {
+        setManagedModels([]);
+      }
+    };
+    void loadManagedModels();
+  }, [user]);
+
+  // Merge managed models into the final list
+  const finalModelList = useMemo(() => {
+    // [Managed Auth] Enforce Managed Models Only. Disable fallback to local/BYOK models.
+    // return [...managedModels, ...modelList];
+    return [...managedModels];
+  }, [managedModels, modelList]);
+
+  return { modelList: finalModelList, isGoogleAuth, geminiModeOptions };
 };
 
 // Agent Logo 映射 (custom uses Robot icon from @icon-park/react)
@@ -290,12 +327,50 @@ const Guid: React.FC = () => {
   const handleSend = async () => {
     // 默认情况使用 Gemini（参考 main 分支的纯粹逻辑）
     if (!selectedAgent || selectedAgent === 'gemini') {
-      if (!currentModel) return;
+      // [Managed Auth] ALWAYS fetch fresh API key on new conversation start
+      // This ensures subscription is validated every time
+      if (!auth.currentUser) {
+        Message.error({
+          content: '로그인이 필요합니다.',
+          duration: 5000,
+        });
+        throw new Error('Not logged in');
+      }
+
+      let modelToUse: TProviderWithModel | null = null;
+
+      try {
+        const token = await auth.currentUser.getIdToken();
+        console.log('[Guid] Fetching fresh API key for new conversation...');
+        const providers = await ModelProvisioningService.getProvisionedModels(token);
+        const freshProvider = providers.find((p: IProvider) => p.id === 'gemini-managed-real');
+
+        if (freshProvider && freshProvider.model?.length > 0) {
+          modelToUse = {
+            ...freshProvider,
+            useModel: freshProvider.model[0], // Use first available model
+          };
+          console.log('[Guid] Successfully got fresh API key');
+        } else {
+          throw new Error('No managed model available from server');
+        }
+      } catch (e: any) {
+        console.error('[Guid] Failed to get API key:', e);
+        // Show user-friendly error message
+        const isSubscriptionError = e?.message?.includes('Subscription Error');
+        Message.error({
+          content: isSubscriptionError ? '구독이 필요합니다. 결제를 진행해주세요.' : '서버에 연결할 수 없습니다. 네트워크를 확인해주세요.',
+          duration: 5000,
+        });
+        throw e;
+      }
+
+      // Now create conversation with the fresh model
       try {
         const conversation = await ipcBridge.conversation.create.invoke({
           type: 'gemini',
           name: input,
-          model: currentModel,
+          model: modelToUse,
           workspaceId: currentWorkspace?.id,
           extra: {
             defaultFiles: files,
@@ -633,18 +708,18 @@ const Guid: React.FC = () => {
                   </span>
                 </Dropdown>
 
-                {selectedAgent === 'gemini' && (
+                {/* {selectedAgent === 'gemini' && (
                   <Dropdown
                     trigger='hover'
                     droplist={
                       <Menu selectedKeys={currentModel ? [currentModel.id + currentModel.useModel] : []}>
                         {!modelList || modelList.length === 0
                           ? [
-                              /* 暂无可用模型提示 */
+                              // 暂无可用模型提示
                               <Menu.Item key='no-models' className='px-12px py-12px text-t-secondary text-14px text-center flex justify-center items-center' disabled>
                                 {t('settings.noAvailableModels')}
                               </Menu.Item>,
-                              /* Add Model 选项 */
+                              // Add Model 选项
                               <Menu.Item key='add-model' className='text-12px text-t-secondary' onClick={() => navigate('/settings/model')}>
                                 <Plus theme='outline' size='12' />
                                 {t('settings.addModel')}
@@ -695,7 +770,7 @@ const Guid: React.FC = () => {
                                   </Menu.ItemGroup>
                                 );
                               }),
-                              /* Add Model 选项 */
+                              // Add Model 选项
                               <Menu.Item key='add-model' className='text-12px text-t-secondary' onClick={() => navigate('/settings/model')}>
                                 <Plus theme='outline' size='12' />
                                 {t('settings.addModel')}
@@ -708,7 +783,7 @@ const Guid: React.FC = () => {
                       {currentModel ? formatGeminiModelLabel(currentModel, currentModel.useModel) : t('conversation.welcome.selectModel')}
                     </Button>
                   </Dropdown>
-                )}
+                )} */}
               </div>
               <div className={styles.actionSubmit}>
                 <Button

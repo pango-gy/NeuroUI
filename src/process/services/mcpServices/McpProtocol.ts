@@ -445,6 +445,9 @@ export abstract class AbstractMcpAgent implements IMcpProtocol {
   protected async testStreamableHttpConnection(transport: { url: string; headers?: Record<string, string> }): Promise<McpConnectionTestResult> {
     let mcpClient: Client | null = null;
 
+    console.log(`[StreamableHTTP] Testing connection to: ${transport.url}`);
+    console.log(`[StreamableHTTP] Headers present: ${Object.keys(transport.headers || {}).join(', ')}`);
+
     try {
       // app imported statically
 
@@ -472,7 +475,9 @@ export abstract class AbstractMcpAgent implements IMcpProtocol {
       );
 
       // 连接到服务器并获取工具列表
+      console.log('[StreamableHTTP] Connecting...');
       await mcpClient.connect(streamableHttpTransport);
+      console.log('[StreamableHTTP] Connected! Listing tools...');
       const result = await mcpClient.listTools();
 
       const tools = result.tools.map((tool) => ({
@@ -480,11 +485,17 @@ export abstract class AbstractMcpAgent implements IMcpProtocol {
         description: tool.description,
       }));
 
+      console.log(`[StreamableHTTP] Success! Found ${tools.length} tools`);
       return { success: true, tools };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[StreamableHTTP] Connection failed: ${errorMessage}`);
+      if (error instanceof Error && error.stack) {
+        console.error(`[StreamableHTTP] Stack trace: ${error.stack}`);
+      }
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       };
     } finally {
       // 清理连接

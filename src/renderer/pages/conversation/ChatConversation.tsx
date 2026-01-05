@@ -7,6 +7,8 @@
 import { ipcBridge } from '@/common';
 import type { TChatConversation } from '@/common/storage';
 import { uuid } from '@/common/utils';
+import addChatIcon from '@/renderer/assets/add-chat.svg';
+import { iconColors } from '@/renderer/theme/colors';
 import { Button, Dropdown, Menu, Tooltip, Typography } from '@arco-design/web-react';
 import { History } from '@icon-park/react';
 import React, { useMemo } from 'react';
@@ -14,14 +16,11 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import { emitter } from '../../utils/emitter';
-import AcpChat from './acp/AcpChat';
 import ChatLayout from './ChatLayout';
 import ChatSider from './ChatSider';
-import GeminiChat from './gemini/GeminiChat';
+import AcpChat from './acp/AcpChat';
 import CodexChat from './codex/CodexChat';
-import { iconColors } from '@/renderer/theme/colors';
-import addChatIcon from '@/renderer/assets/add-chat.svg';
-import GeminiModelSelector from './gemini/GeminiModelSelector';
+import GeminiChat from './gemini/GeminiChat';
 import { useGeminiModelSelection } from './gemini/useGeminiModelSelection';
 
 const AssociatedConversation: React.FC<{ conversation_id: string }> = ({ conversation_id }) => {
@@ -99,7 +98,7 @@ const GeminiConversationPanel: React.FC<{ conversation: GeminiConversation; slid
     title: conversation.name,
     siderTitle: sliderTitle,
     sider: <ChatSider conversation={conversation} />,
-    headerLeft: <GeminiModelSelector selection={modelSelection} />,
+    // headerLeft: <GeminiModelSelector selection={modelSelection} />,
     workspaceEnabled,
   };
 
