@@ -1,29 +1,28 @@
 import { ipcBridge } from '@/common';
 import { transformMessage } from '@/common/chatLib';
-import type { IProvider, TChatConversation, TokenUsageData, TProviderWithModel } from '@/common/storage';
+import type { TChatConversation, TokenUsageData } from '@/common/storage';
 import { uuid } from '@/common/utils';
 import ContextUsageIndicator from '@/renderer/components/ContextUsageIndicator';
 import FilePreview from '@/renderer/components/FilePreview';
 import HorizontalFileList from '@/renderer/components/HorizontalFileList';
-import SendBox from '@/renderer/components/sendbox';
 import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/ThoughtDisplay';
-import { useGeminiGoogleAuthModels } from '@/renderer/hooks/useGeminiGoogleAuthModels';
+import SendBox from '@/renderer/components/sendbox';
+import { useAuth } from '@/renderer/context/AuthContext';
 import { useLatestRef } from '@/renderer/hooks/useLatestRef';
 import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/useSendBoxDraft';
 import { createSetUploadFile, useSendBoxFiles } from '@/renderer/hooks/useSendBoxFiles';
 import { useAddOrUpdateMessage } from '@/renderer/messages/hooks';
 import { usePreviewContext } from '@/renderer/pages/conversation/preview';
 import { allSupportedExts } from '@/renderer/services/FileService';
+import { ModelProvisioningService } from '@/renderer/services/ModelProvisioningService';
 import { iconColors } from '@/renderer/theme/colors';
 import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { mergeFileSelectionItems } from '@/renderer/utils/fileSelection';
-import { hasSpecificModelCapability } from '@/renderer/utils/modelCapabilities';
 import { getModelContextLimit } from '@/renderer/utils/modelContextLimits';
-import { Button, Dropdown, Menu, Tag, Tooltip } from '@arco-design/web-react';
+import { Button, Tag } from '@arco-design/web-react';
 import { Plus } from '@icon-park/react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 import type { GeminiModelSelection } from './useGeminiModelSelection';
 
 const useGeminiSendBoxDraft = getSendBoxDraftHook('gemini', {
@@ -34,6 +33,7 @@ const useGeminiSendBoxDraft = getSendBoxDraftHook('gemini', {
 });
 
 const useGeminiMessage = (conversation_id: string) => {
+  const { user } = useAuth();
   const addOrUpdateMessage = useAddOrUpdateMessage();
   const [running, setRunning] = useState(false);
   const [thought, setThought] = useState<ThoughtData>({
@@ -47,8 +47,12 @@ const useGeminiMessage = (conversation_id: string) => {
       if (conversation_id !== message.conversation_id) {
         return;
       }
-      // console.log('responseStream.message', message);
-      switch (message.type) {
+      console.log('[GeminiSendBox] Received event:', message.type, 'Data:', message.data);
+
+      // Normalize event type to lowercase for case-insensitive matching
+      const eventType = message.type?.toLowerCase();
+
+      switch (eventType) {
         case 'thought':
           setThought(message.data as ThoughtData);
           break;
@@ -59,27 +63,28 @@ const useGeminiMessage = (conversation_id: string) => {
           {
             setRunning(false);
             setThought({ subject: '', description: '' });
-          }
-          break;
-        case 'finished':
-          {
-            // 处理 Finished 事件，提取 token 使用统计
-            const finishedData = message.data as {
-              reason?: string;
+
+            // Extract usageMetadata from finish event (now included by backend)
+            const finishData = message.data as {
               usageMetadata?: {
                 promptTokenCount?: number;
                 candidatesTokenCount?: number;
                 totalTokenCount?: number;
-                cachedContentTokenCount?: number;
               };
             };
-            if (finishedData?.usageMetadata) {
+
+            if (finishData?.usageMetadata) {
               const newTokenUsage: TokenUsageData = {
-                totalTokens: finishedData.usageMetadata.totalTokenCount || 0,
+                totalTokens: finishData.usageMetadata.totalTokenCount || 0,
               };
               setTokenUsage(newTokenUsage);
+
+              // Log usage to Firebase for billing
+              if (user?.id) {
+                void ModelProvisioningService.logUsage(user.id, 'gemini-3-pro-preview', finishData.usageMetadata);
+              }
+
               // 持久化 token 使用统计到会话的 extra.lastTokenUsage 字段
-              // 使用 mergeExtra 选项，后端会自动合并 extra 字段，避免两次 IPC 调用
               void ipcBridge.conversation.update.invoke({
                 id: conversation_id,
                 updates: {
@@ -92,6 +97,45 @@ const useGeminiMessage = (conversation_id: string) => {
             }
           }
           break;
+        case 'finished':
+          {
+            const finishedData = message.data as {
+              reason?: string;
+              usageMetadata?: {
+                promptTokenCount?: number;
+                candidatesTokenCount?: number;
+                totalTokenCount?: number;
+                cachedContentTokenCount?: number;
+              };
+            };
+
+            if (finishedData?.usageMetadata) {
+              const newTokenUsage: TokenUsageData = {
+                totalTokens: finishedData.usageMetadata.totalTokenCount || 0,
+              };
+              setTokenUsage(newTokenUsage);
+
+              // Log usage to Firebase for billing
+              if (user?.id) {
+                void ModelProvisioningService.logUsage(user.id, 'gemini-3-pro-preview', finishedData.usageMetadata);
+              }
+
+              // 持久化 token 使用统计到会话的 extra.lastTokenUsage 字段
+              // 使用 mergeExtra 选项，后端会自动合并 extra 字段，避免两次 IPC 调用
+              void ipcBridge.conversation.update.invoke({
+                id: conversation_id,
+                updates: {
+                  extra: {
+                    lastTokenUsage: newTokenUsage,
+                  } as TChatConversation['extra'],
+                },
+                mergeExtra: true,
+              });
+            } else {
+              console.warn('[GeminiSendBox] ⚠️ No usageMetadata in finished event!');
+            }
+          }
+          break;
         default:
           {
             // Backend handles persistence, Frontend only updates UI
@@ -100,7 +144,7 @@ const useGeminiMessage = (conversation_id: string) => {
           break;
       }
     });
-  }, [conversation_id, addOrUpdateMessage]);
+  }, [conversation_id, addOrUpdateMessage, user]);
 
   useEffect(() => {
     setRunning(false);
@@ -344,6 +388,7 @@ const GeminiSendBox: React.FC<{
         }
         onSend={onSendHandler}
       ></SendBox>
+      <div className='text-12px text-t-tertiary text-center mt-8px select-none'>AI는 실수를 할 수 있으니 중요한 정보는 다시 한번 확인하세요.</div>
     </div>
   );
 };

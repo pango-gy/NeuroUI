@@ -84,8 +84,8 @@ const ChatLayout: React.FC<{
   headerLeft?: React.ReactNode;
   workspaceEnabled?: boolean;
 }> = (props) => {
-  // 默认折叠工作空间，用户按需展开 / Default to collapsed workspace; users can toggle when needed
-  const [rightSiderCollapsed, setRightSiderCollapsed] = useState(true);
+  // 默认展开工作空间，不再折叠 / Default to expanded workspace; users can toggle when needed
+  const [rightSiderCollapsed, setRightSiderCollapsed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(() => (typeof window === 'undefined' ? 0 : window.innerWidth));
   const { backend, agentName, workspaceEnabled = true } = props;
@@ -347,7 +347,7 @@ const ChatLayout: React.FC<{
                 style: {},
                 reverse: true,
               })}
-            <WorkspacePanelHeader showToggle={!isMacRuntime} collapsed={rightSiderCollapsed} onToggle={() => dispatchWorkspaceToggleEvent()} togglePlacement={layout?.isMobile ? 'left' : 'right'}>
+            <WorkspacePanelHeader showToggle={true} collapsed={rightSiderCollapsed} onToggle={() => dispatchWorkspaceToggleEvent()} togglePlacement={layout?.isMobile ? 'left' : 'right'}>
               {props.siderTitle}
             </WorkspacePanelHeader>
             <ArcoLayout.Content style={{ height: `calc(100% - ${WORKSPACE_HEADER_HEIGHT}px)` }}>{props.sider}</ArcoLayout.Content>
@@ -383,7 +383,7 @@ const ChatLayout: React.FC<{
           </div>
         )}
 
-        {!isMacRuntime && workspaceEnabled && rightSiderCollapsed && !layout?.isMobile && (
+        {workspaceEnabled && rightSiderCollapsed && !layout?.isMobile && (
           <button type='button' className='workspace-toggle-floating workspace-header__toggle absolute top-1/2 right-2 z-10' style={{ transform: 'translateY(-50%)' }} onClick={() => dispatchWorkspaceToggleEvent()} aria-label='Expand workspace'>
             <ExpandLeft size={16} />
           </button>

@@ -27,6 +27,7 @@ export interface IConfigStorageRefer {
     proxy: string;
     GOOGLE_GEMINI_BASE_URL?: string;
     GOOGLE_CLOUD_PROJECT?: string;
+    yoloMode?: boolean;
   };
   'acp.config': {
     [backend in AcpBackend]?: {

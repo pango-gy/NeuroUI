@@ -63,36 +63,66 @@ export class McpService {
   }
 
   /**
-   * 헬퍼 메서드: MCP 서버 설정에 토큰 주입
-   * 헤더에 <token> 플레이스홀더가 있으면 메모리에 저장된 실제 토큰으로 교체합니다.
+   * 헬퍼 메서드: MCP 서버 설정에 토큰 및 URL 주입
+   * 1. 헤더에 <token> 플레이스홀더가 있으면 메모리에 저장된 실제 토큰으로 교체
+   * 2. google-ads-mcp, google-analytics-mcp 등 플랫폼 MCP는 항상 현재 토큰 및 URL로 업데이트
    */
   private injectCredentials(server: IMcpServer): IMcpServer {
     const token = this.getPlatformCredentials();
-    if (!token) return server;
+    if (!token) {
+      console.log(`[McpService] No credentials available for ${server.name}`);
+      return server;
+    }
 
-    // transport 타입에 따라 헤더 확인
+    // 플랫폼 MCP 서버 URL 매핑 (환경변수에서 읽음)
+    const platformMcpUrls: Record<string, string | undefined> = {
+      'google-ads-mcp': process.env.VITE_GOOGLE_ADS_MCP_URL,
+      'google-analytics-mcp': process.env.VITE_GOOGLE_ANALYTICS_MCP_URL,
+    };
+
+    // transport 타입에 따라 헤더 및 URL 확인
     if (server.transport.type === 'http' || server.transport.type === 'sse' || server.transport.type === 'streamable_http') {
-      const headers = server.transport.headers;
-      if (headers) {
-        let headersChanged = false;
-        const newHeaders = { ...headers };
+      const headers = server.transport.headers || {};
+      const newHeaders = { ...headers };
+      let configChanged = false;
+      let newUrl = (server.transport as any).url;
 
-        for (const [key, value] of Object.entries(newHeaders)) {
-          if (typeof value === 'string' && value.includes('<token>')) {
-            newHeaders[key] = value.replace('<token>', token);
-            headersChanged = true;
-          }
+      // 1. <token> 플레이스홀더 치환
+      for (const [key, value] of Object.entries(newHeaders)) {
+        if (typeof value === 'string' && value.includes('<token>')) {
+          newHeaders[key] = value.replace('<token>', token);
+          configChanged = true;
+        }
+      }
+
+      // 2. 플랫폼 MCP 서버의 경우 URL 및 토큰 강제 업데이트
+      const platformUrl = platformMcpUrls[server.name];
+      if (platformUrl) {
+        // URL 업데이트 (localhost에서 production으로)
+        if (newUrl !== platformUrl) {
+          console.log(`[McpService] Updating URL for ${server.name}: ${newUrl} -> ${platformUrl}`);
+          newUrl = platformUrl;
+          configChanged = true;
         }
 
-        if (headersChanged) {
-          return {
-            ...server,
-            transport: {
-              ...server.transport,
-              headers: newHeaders,
-            },
-          };
+        // Authorization 헤더 업데이트
+        const expectedAuth = `Bearer ${token}`;
+        if (newHeaders['Authorization'] !== expectedAuth) {
+          newHeaders['Authorization'] = expectedAuth;
+          configChanged = true;
+          console.log(`[McpService] Injected fresh token for ${server.name}`);
         }
+      }
+
+      if (configChanged) {
+        return {
+          ...server,
+          transport: {
+            ...server.transport,
+            url: newUrl,
+            headers: newHeaders,
+          },
+        };
       }
     }
 
@@ -176,11 +206,21 @@ export class McpService {
    * 测试MCP服务器连接
    */
   async testMcpConnection(server: IMcpServer): Promise<McpConnectionTestResult> {
+    console.log(`[McpService] testMcpConnection called for: ${server.name}`);
+    console.log(`[McpService] Current token available: ${!!this.mcpToken}`);
+
     // 使用第一个可用的agent进行连接测试，因为测试逻辑在基类中是通用的
     const firstAgent = this.agents.values().next().value;
     if (firstAgent) {
       // 运行时动态注入认证信息
       const serverWithAuth = this.injectCredentials(server);
+
+      // 디버그: 주입 후 헤더 확인
+      if (serverWithAuth.transport.type === 'streamable_http' || serverWithAuth.transport.type === 'http' || serverWithAuth.transport.type === 'sse') {
+        const authHeader = (serverWithAuth.transport as any).headers?.Authorization;
+        console.log(`[McpService] Authorization header present: ${!!authHeader}, length: ${authHeader?.length || 0}`);
+      }
+
       return await firstAgent.testMcpConnection(serverWithAuth);
     }
     return { success: false, error: 'No agent available for connection testing' };

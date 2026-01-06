@@ -1,10 +1,10 @@
 import FlexFullContainer from '@/renderer/components/FlexFullContainer';
-import { Gemini, Info, LinkCloud, System, Toolkit, Robot, FullScreen } from '@icon-park/react';
+import { Tooltip } from '@arco-design/web-react';
+import { FullScreen, Info, PieTwo, System, Toolkit } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Tooltip } from '@arco-design/web-react';
 
 const SettingsSider: React.FC<{ collapsed?: boolean }> = ({ collapsed = false }) => {
   const navigate = useNavigate();
@@ -14,20 +14,25 @@ const SettingsSider: React.FC<{ collapsed?: boolean }> = ({ collapsed = false })
   const menus = useMemo(() => {
     return [
       {
-        label: t('settings.gemini'),
-        icon: <Gemini />,
-        path: 'gemini',
-      },
-      {
-        label: t('settings.model'),
-        icon: <LinkCloud />,
-        path: 'model',
+        label: '사용량',
+        icon: <PieTwo />,
+        path: 'usage',
       },
       {
         label: t('settings.tools'),
         icon: <Toolkit />,
         path: 'tools',
       },
+      // {
+      //   label: t('settings.gemini'),
+      //   icon: <Gemini />,
+      //   path: 'gemini',
+      // },
+      // {
+      //   label: t('settings.model'),
+      //   icon: <LinkCloud />,
+      //   path: 'model',
+      // },
       {
         label: t('settings.display'),
         icon: <FullScreen />,

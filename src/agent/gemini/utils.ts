@@ -5,7 +5,7 @@
  */
 
 import type { CompletedToolCall, Config, GeminiClient, ServerGeminiStreamEvent, ToolCallRequestInfo } from '@office-ai/aioncli-core';
-import { executeToolCall, GeminiEventType as ServerGeminiEventType } from '@office-ai/aioncli-core';
+import { GeminiEventType as ServerGeminiEventType, executeToolCall } from '@office-ai/aioncli-core';
 import { parseAndFormatApiError } from './cli/errorParsing';
 
 enum StreamProcessingStatus {
@@ -14,7 +14,9 @@ enum StreamProcessingStatus {
   Error,
 }
 
-export const processGeminiStreamEvents = async (stream: AsyncIterable<ServerGeminiStreamEvent>, config: Config, onStreamEvent: (event: { type: ServerGeminiStreamEvent['type']; data: unknown }) => void): Promise<StreamProcessingStatus> => {
+export const processGeminiStreamEvents = async (stream: AsyncIterable<ServerGeminiStreamEvent>, config: Config, onStreamEvent: (event: { type: ServerGeminiStreamEvent['type']; data: unknown }) => void): Promise<{ status: StreamProcessingStatus; usageMetadata?: unknown }> => {
+  let capturedUsageMetadata: unknown = undefined;
+
   for await (const event of stream) {
     switch (event.type) {
       case ServerGeminiEventType.Thought:
@@ -37,9 +39,9 @@ export const processGeminiStreamEvents = async (stream: AsyncIterable<ServerGemi
         break;
       case ServerGeminiEventType.Finished:
         {
-          // 传递 Finished 事件，包含 token 使用统计
+          // Pass Finished event with token usage stats
           onStreamEvent({ type: event.type, data: event.value });
-          // console.log('[Token Usage]', event.value.usageMetadata);
+          capturedUsageMetadata = event.value?.usageMetadata;
         }
         break;
       case ServerGeminiEventType.ChatCompressed:
@@ -61,7 +63,7 @@ export const processGeminiStreamEvents = async (stream: AsyncIterable<ServerGemi
       }
     }
   }
-  return StreamProcessingStatus.Completed;
+  return { status: StreamProcessingStatus.Completed, usageMetadata: capturedUsageMetadata };
 };
 
 /**
