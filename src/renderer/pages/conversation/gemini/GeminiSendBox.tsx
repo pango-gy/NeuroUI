@@ -388,6 +388,7 @@ const GeminiSendBox: React.FC<{
         }
         onSend={onSendHandler}
       ></SendBox>
+      <div className='text-12px text-t-tertiary text-center mt-8px select-none'>AI는 실수를 할 수 있으니 중요한 정보는 다시 한번 확인하세요.</div>
     </div>
   );
 };

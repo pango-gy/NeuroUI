@@ -33,7 +33,7 @@ import { hasSpecificModelCapability } from '@/renderer/utils/modelCapabilities';
 import type { AcpBackend } from '@/types/acpTypes';
 import { Button, ConfigProvider, Dropdown, Input, Menu, Message, Tooltip } from '@arco-design/web-react';
 import { IconClose } from '@arco-design/web-react/icon';
-import { ArrowUp, FolderOpen, Plus, Robot, UploadOne } from '@icon-park/react';
+import { ArrowUp, FolderOpen, Plus, UploadOne } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -168,6 +168,8 @@ const AGENT_LOGO_MAP: Partial<Record<AcpBackend, string>> = {
   kimi: KimiLogo,
   opencode: OpenCodeLogo,
 };
+
+import { ConnectedMcpIcons } from '@/renderer/components/ConnectedMcpIcons';
 
 const Guid: React.FC = () => {
   const { t } = useTranslation();
@@ -569,59 +571,71 @@ const Guid: React.FC = () => {
     <ConfigProvider getPopupContainer={() => guidContainerRef.current || document.body}>
       <div ref={guidContainerRef} className='h-full flex-center flex-col px-10px' style={{ position: 'relative' }}>
         <div className={styles.guidLayout}>
-          <p className={`text-2xl font-semibold mb-8 text-0 text-center`}>{t('conversation.welcome.title')}</p>
+          <div className='flex items-center justify-center gap-8px mb-8'>
+            <p className={`text-2xl font-semibold text-0 text-center m-0`}>{t('conversation.welcome.title')}</p>
+            <ConnectedMcpIcons />
+          </div>
+        </div>
 
-          {/* Agent 选择器 - 在标题下方 */}
-          {availableAgents && availableAgents.length > 0 && (
-            <div className='w-full flex justify-center'>
+        <div className={`${styles.marqueeContainer} mb-6`} style={{ width: '100%', maxWidth: '1200px', margin: '0 auto 24px', padding: '0 16px', boxSizing: 'border-box' }}>
+          <div className={styles.marqueeContent}>
+            {[
+              '저번달 광고 성과에 대한 심층적 인사이트가 필요해.',
+              'Google Analytics를 토대로 지난 7일동안 전환을 많이 일으킨 광고 매체가 어디야?',
+              '이번 주 Google Ads 캠페인 효율 분석해줘.',
+              'ROAS가 가장 높은 캠페인은 무엇인가요?',
+              '지난달 대비 CPC 변화 추이 알려줘.',
+              '전환율이 가장 낮은 키워드 10개 추출해줘.',
+              '이탈률이 높은 랜딩 페이지 분석해줘.',
+              '모바일 기기에서의 광고 성과가 궁금해.',
+              '잠재 고객(Audience) 세그먼트별 성과 분석해줘.',
+              '광고 소재(Creative)별 A/B 테스트 결과 요약해줘.',
+              '성과가 저조한 Google Ads 캠페인 중지 추천해줘.',
+              '신규 방문자 유입이 가장 많은 채널은 어디야?',
+              '고객 획득 비용(CAC)이 가장 낮은 캠페인은?',
+              '재방문율을 높이기 위한 전략 제안해줘.',
+              '경쟁사 대비 우리의 검색 점유율 변화 분석해줘.',
+              '이번 달 목표 ROI 달성 가능성 예측해줘.',
+              '동영상 광고(YouTube) 조회수 및 도달 범위 분석.',
+              '디스플레이 광고 노출 대비 클릭 성과 리포트.',
+              '검색 광고 품질 평가 점수 낮은 키워드 보여줘.',
+              '예산 최적화를 위한 광고 입찰 전략 제안.',
+              // Duplicate for seamless loop
+              '저번달 광고 성과에 대한 심층적 인사이트가 필요해.',
+              'Google Analytics를 토대로 지난 7일동안 전환을 많이 일으킨 광고 매체가 어디야?',
+              '이번 주 Google Ads 캠페인 효율 분석해줘.',
+              'ROAS가 가장 높은 캠페인은 무엇인가요?',
+              '지난달 대비 CPC 변화 추이 알려줘.',
+              '전환율이 가장 낮은 키워드 10개 추출해줘.',
+              '이탈률이 높은 랜딩 페이지 분석해줘.',
+              '모바일 기기에서의 광고 성과가 궁금해.',
+              '잠재 고객(Audience) 세그먼트별 성과 분석해줘.',
+              '광고 소재(Creative)별 A/B 테스트 결과 요약해줘.',
+              '성과가 저조한 Google Ads 캠페인 중지 추천해줘.',
+              '신규 방문자 유입이 가장 많은 채널은 어디야?',
+              '고객 획득 비용(CAC)이 가장 낮은 캠페인은?',
+              '재방문율을 높이기 위한 전략 제안해줘.',
+              '경쟁사 대비 우리의 검색 점유율 변화 분석해줘.',
+              '이번 달 목표 ROI 달성 가능성 예측해줘.',
+              '동영상 광고(YouTube) 조회수 및 도달 범위 분석.',
+              '디스플레이 광고 노출 대비 클릭 성과 리포트.',
+              '검색 광고 품질 평가 점수 낮은 키워드 보여줘.',
+              '예산 최적화를 위한 광고 입찰 전략 제안.',
+            ].map((text, index) => (
               <div
-                className='inline-flex items-center bg-fill-2'
-                style={{
-                  marginBottom: 16,
-                  padding: '4px',
-                  borderRadius: '30px',
-                  transition: 'all 0.6s cubic-bezier(0.2, 0.8, 0.3, 1)',
-                  width: 'fit-content',
-                  gap: 0,
+                key={index}
+                className='px-16px py-8px bg-fill-2 hover:bg-fill-3 cursor-pointer rounded-full text-13px text-t-secondary transition-colors duration-200 border border-transparent hover:border-border whitespace-nowrap'
+                onClick={() => {
+                  setInput(text);
                 }}
               >
-                {availableAgents.map((agent, index) => {
-                  const isSelected = selectedAgentKey === getAgentKey(agent);
-                  const logoSrc = AGENT_LOGO_MAP[agent.backend];
-
-                  return (
-                    <React.Fragment key={getAgentKey(agent)}>
-                      {index > 0 && <div className='text-white/30 text-16px lh-1 p-2px select-none'>|</div>}
-                      <div
-                        className={`group flex items-center cursor-pointer whitespace-nowrap overflow-hidden ${isSelected ? 'opacity-100 px-12px py-8px rd-20px mx-2px' : 'opacity-60 p-4px hover:opacity-100'}`}
-                        style={
-                          isSelected
-                            ? {
-                                transition: 'opacity 0.5s cubic-bezier(0.2, 0.8, 0.3, 1)',
-                                backgroundColor: 'var(--fill-0)',
-                              }
-                            : { transition: 'opacity 0.5s cubic-bezier(0.2, 0.8, 0.3, 1)' }
-                        }
-                        onClick={() => setSelectedAgentKey(getAgentKey(agent))}
-                      >
-                        {logoSrc ? <img src={logoSrc} alt={`${agent.backend} logo`} width={20} height={20} style={{ objectFit: 'contain', flexShrink: 0 }} /> : <Robot theme='outline' size={20} style={{ flexShrink: 0 }} />}
-                        <span
-                          className={`font-medium text-14px ${isSelected ? 'font-semibold' : 'max-w-0 opacity-0 overflow-hidden group-hover:max-w-100px group-hover:opacity-100 group-hover:ml-8px'}`}
-                          style={{
-                            color: 'var(--color-text-1)',
-                            transition: isSelected ? 'color 0.5s cubic-bezier(0.2, 0.8, 0.3, 1), font-weight 0.5s cubic-bezier(0.2, 0.8, 0.3, 1)' : 'max-width 0.6s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) 0.05s, margin 0.6s cubic-bezier(0.2, 0.8, 0.3, 1)',
-                          }}
-                        >
-                          {agent.name}
-                        </span>
-                      </div>
-                    </React.Fragment>
-                  );
-                })}
+                {text}
               </div>
-            </div>
-          )}
+            ))}
+          </div>
+        </div>
 
+        <div className={styles.guidLayout}>
           <div
             className={`${styles.guidInputCard} bg-border-2 b-solid border rd-20px transition-all duration-200 overflow-hidden p-16px bg-[var(--fill-0)] ${isFileDragging ? 'border-dashed' : 'border-3'}`}
             style={{

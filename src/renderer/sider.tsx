@@ -53,12 +53,26 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
 
   // 브랜드 선택 드롭다운 메뉴
   const brandMenu = (
-    <Menu onClickMenuItem={(key) => switchWorkspace(key)}>
+    <Menu
+      onClickMenuItem={(key) => {
+        if (key === 'add_workspace') {
+          window.open('https://neuro.pango-gy.com', '_blank');
+        } else {
+          switchWorkspace(key);
+        }
+      }}
+    >
       {workspaces.map((ws) => (
         <Menu.Item key={ws.id} className={ws.id === currentWorkspace?.id ? 'arco-menu-selected' : ''}>
           {ws.name}
         </Menu.Item>
       ))}
+      <Menu.Item key='add_workspace'>
+        <div className='flex items-center gap-8px'>
+          <Plus theme='outline' size='16' fill={iconColors.primary} />
+          <span>{t('workspace.add', { defaultValue: '워크스페이스 추가' })}</span>
+        </div>
+      </Menu.Item>
     </Menu>
   );
 

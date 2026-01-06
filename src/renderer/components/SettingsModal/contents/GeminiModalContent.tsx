@@ -9,9 +9,9 @@ import { ConfigStorage } from '@/common/storage';
 import AionScrollArea from '@/renderer/components/base/AionScrollArea';
 import { useThemeContext } from '@/renderer/context/ThemeContext';
 import { Button, Divider, Form, Input, Message, Switch } from '@arco-design/web-react';
+import classNames from 'classnames';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import classNames from 'classnames';
 import { useSettingsViewMode } from '../settingsViewContext';
 
 interface GeminiModalContentProps {
@@ -84,6 +84,7 @@ const GeminiModalContent: React.FC<GeminiModalContentProps> = ({ onRequestClose 
         const formData = {
           ...geminiConfig,
           customCss: customCss || '',
+          yoloMode: geminiConfig?.yoloMode ?? true,
         };
         form.setFieldsValue(formData);
         loadGoogleAuthStatus(geminiConfig?.proxy);

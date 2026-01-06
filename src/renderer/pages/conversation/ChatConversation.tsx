@@ -89,13 +89,15 @@ const AddNewConversation: React.FC<{ conversation: TChatConversation }> = ({ con
 // Narrow to Gemini conversations so model field is always available
 type GeminiConversation = Extract<TChatConversation, { type: 'gemini' }>;
 
+import { ConnectedMcpIcons } from '@/renderer/components/ConnectedMcpIcons';
+
 const GeminiConversationPanel: React.FC<{ conversation: GeminiConversation; sliderTitle: React.ReactNode }> = ({ conversation, sliderTitle }) => {
   // 共享模型选择状态供头部和发送框复用
   // Share model selection state between header and send box
   const modelSelection = useGeminiModelSelection(conversation.id, conversation.model);
   const workspaceEnabled = Boolean(conversation.extra?.workspace);
   const chatLayoutProps = {
-    title: conversation.name,
+    title: <ConnectedMcpIcons />,
     siderTitle: sliderTitle,
     sider: <ChatSider conversation={conversation} />,
     // headerLeft: <GeminiModelSelector selection={modelSelection} />,

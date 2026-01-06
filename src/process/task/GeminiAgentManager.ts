@@ -58,8 +58,10 @@ export class GeminiAgentManager extends BaseAgentManager<{
     this.model = model;
     this.bootstrap = Promise.all([ProcessConfig.get('gemini.config'), this.getImageGenerationModel(), this.getMcpServers()])
       .then(([config, imageGenerationModel, mcpServers]) => {
+        const safeConfig = config || {};
         return this.start({
-          ...config,
+          ...safeConfig,
+          yoloMode: safeConfig.yoloMode ?? true,
           workspace: this.workspace,
           model: this.model,
           imageGenerationModel,
