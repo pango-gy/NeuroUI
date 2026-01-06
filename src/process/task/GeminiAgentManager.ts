@@ -8,7 +8,7 @@ import { ipcBridge } from '@/common';
 import type { TMessage } from '@/common/chatLib';
 import { transformMessage } from '@/common/chatLib';
 import type { IResponseMessage } from '@/common/ipcBridge';
-import type { IMcpServer, TProviderWithModel } from '@/common/storage';
+import type { IConfigStorageRefer, IMcpServer, TProviderWithModel } from '@/common/storage';
 import { ProcessConfig } from '@/process/initStorage';
 import { getDatabase } from '@process/database';
 import { addMessage, addOrUpdateMessage, nextTickToLocalFinish } from '../message';
@@ -22,10 +22,12 @@ export class GeminiAgentManager extends BaseAgentManager<{
   imageGenerationModel?: TProviderWithModel;
   webSearchEngine?: 'google' | 'default';
   mcpServers?: Record<string, any>;
+  yoloMode?: boolean;
 }> {
   workspace: string;
   model: TProviderWithModel;
   private bootstrap: Promise<void>;
+  private yoloMode: boolean = false;
 
   private async injectHistoryFromDatabase(): Promise<void> {
     try {
@@ -58,10 +60,11 @@ export class GeminiAgentManager extends BaseAgentManager<{
     this.model = model;
     this.bootstrap = Promise.all([ProcessConfig.get('gemini.config'), this.getImageGenerationModel(), this.getMcpServers()])
       .then(([config, imageGenerationModel, mcpServers]) => {
-        const safeConfig = config || {};
+        const safeConfig: Partial<IConfigStorageRefer['gemini.config']> = config || {};
+        this.yoloMode = safeConfig.yoloMode ?? true;
         return this.start({
           ...safeConfig,
-          yoloMode: safeConfig.yoloMode ?? true,
+          yoloMode: this.yoloMode,
           workspace: this.workspace,
           model: this.model,
           imageGenerationModel,
@@ -199,6 +202,25 @@ export class GeminiAgentManager extends BaseAgentManager<{
     // 接受来子进程的对话消息
     this.on('gemini.message', (data) => {
       // console.log('gemini.message', data);
+
+      // [YOLO Mode Fix] Intercept tool confirmation messages
+      if (this.yoloMode && data.type === 'tool_group') {
+        const toolData = data.data as any[];
+        // Check if any tool is in 'Confirming' status
+        const confirmingTool = Array.isArray(toolData) ? toolData.find((t) => t.status === 'Confirming') : null;
+
+        if (confirmingTool) {
+          console.log('[GeminiAgentManager] Auto-approving tool execution in YOLO mode (interception)');
+          // Send approval back to worker immediately
+          void this.postMessagePromise(confirmingTool.callId, {
+            confirm: true,
+            approvalType: 'allow_always',
+          });
+          // Do NOT emit this message to frontend to avoid the popup
+          return;
+        }
+      }
+
       if (data.type === 'finish') {
         this.status = 'finished';
       }
@@ -230,6 +252,18 @@ export class GeminiAgentManager extends BaseAgentManager<{
       msg_id: data.msg_id,
       data: null,
     });
+
+    // YOLO 모드일 경우 사용자 확인 없이 자동 승인
+    // If in YOLO mode, auto-approve without user confirmation
+    if (this.yoloMode) {
+      console.log('[GeminiAgentManager] Auto-approving tool execution in YOLO mode');
+      // "Allow Always" (allow_always) 로 자동 응답
+      return this.postMessagePromise(data.callId, {
+        confirm: true,
+        approvalType: 'allow_always',
+      });
+    }
+
     return this.postMessagePromise(data.callId, data.confirmKey);
   }
 
