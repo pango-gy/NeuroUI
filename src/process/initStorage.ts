@@ -346,6 +346,19 @@ const getDefaultMcpServers = (): IMcpServer[] => {
       },
       transportType: 'streamable_http' as const,
     },
+    {
+      name: 'excel-mcp-server',
+      description: 'Excel MCP Server',
+      enabled: true,
+      config: {
+        command: process.execPath,
+        args: [require.resolve('@negokaz/excel-mcp-server/dist/launcher.js')],
+        env: {
+          ELECTRON_RUN_AS_NODE: '1',
+        },
+      },
+      transportType: 'stdio' as const,
+    },
   ];
 
   return servers.map((server, index) => {
@@ -369,7 +382,7 @@ const getDefaultMcpServers = (): IMcpServer[] => {
       id: `mcp_default_${now}_${index}`,
       name: server.name,
       description: server.description || `기본 MCP 서버: ${server.name}`,
-      enabled: false,
+      enabled: (server as any).enabled || false,
       transport,
       createdAt: now,
       updatedAt: now,
@@ -413,9 +426,53 @@ const initStorage = async () => {
       const missingServers = defaultServers.filter((s) => !existingNames.has(s.name));
 
       if (missingServers.length > 0) {
+        // 기존 설정에 새 서버 추가
+        // Add new servers to existing config
         const updatedConfig = [...existingMcpConfig, ...missingServers];
+
+        // excel-mcp-server가 npx를 사용하는 구버전 설정이라면 강제 업데이트
+        // Force update excel-mcp-server if it uses legacy npx config
+        const excelServerIndex = updatedConfig.findIndex((s) => s.name === 'excel-mcp-server');
+        if (excelServerIndex !== -1) {
+          const defaultExcelServer = defaultServers.find((s) => s.name === 'excel-mcp-server');
+          if (defaultExcelServer) {
+            // 항상 최신 설정으로 덮어쓰기 (경로 문제 해결 위해)
+            updatedConfig[excelServerIndex] = {
+              ...updatedConfig[excelServerIndex],
+              transport: defaultExcelServer.transport, // command, args 포함
+              originalJson: defaultExcelServer.originalJson,
+              enabled: true,
+            };
+            console.log('[Neuro] excel-mcp-server 설정 강제 업데이트 완료');
+          }
+        }
+
         await configFile.set('mcp.config', updatedConfig);
         console.log('[Neuro] 누락된 MCP 서버 추가:', missingServers.map((s) => s.name).join(', '));
+      } else {
+        // missingServer가 없더라도 excel-mcp-server 업데이트가 필요할 수 있음
+        // Check if excel-mcp-server needs update even if no missing servers
+        const excelServerIndex = existingMcpConfig.findIndex((s: any) => s.name === 'excel-mcp-server');
+        if (excelServerIndex !== -1) {
+          const currentConfig = existingMcpConfig[excelServerIndex];
+          // command가 없거나 string이거나 npx인 경우 (구버전)
+          const isLegacy = !(currentConfig.transport as any)?.command || (currentConfig.transport as any).command === 'npx';
+
+          if (isLegacy) {
+            const defaultExcelServer = defaultServers.find((s) => s.name === 'excel-mcp-server');
+            if (defaultExcelServer) {
+              const updatedConfig = [...existingMcpConfig];
+              updatedConfig[excelServerIndex] = {
+                ...updatedConfig[excelServerIndex],
+                transport: defaultExcelServer.transport,
+                originalJson: defaultExcelServer.originalJson,
+                enabled: true,
+              };
+              await configFile.set('mcp.config', updatedConfig);
+              console.log('[Neuro] excel-mcp-server 설정 강제 업데이트 완료 (npx -> bundled)');
+            }
+          }
+        }
       }
     }
   } catch (error) {

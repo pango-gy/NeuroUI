@@ -1,9 +1,6 @@
 import { MakerDMG } from '@electron-forge/maker-dmg';
-import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerWix } from '@electron-forge/maker-wix';
-// Import MakerSquirrel conditionally to avoid issues on non-Windows
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const MakerSquirrel = process.platform === 'win32' ? require('@electron-forge/maker-squirrel').MakerSquirrel : null;
+import { MakerZIP } from '@electron-forge/maker-zip';
 import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { WebpackPlugin } from '@electron-forge/plugin-webpack';
@@ -12,6 +9,9 @@ import path from 'path';
 import { mainConfig } from './config/webpack/webpack.config';
 import { rendererConfig } from './config/webpack/webpack.renderer.config';
 import packageJson from './package.json';
+// Import MakerSquirrel conditionally to avoid issues on non-Windows
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const MakerSquirrel = process.platform === 'win32' ? require('@electron-forge/maker-squirrel').MakerSquirrel : null;
 
 // Allow developers to override the npm start dev-server/logging ports without touching code.
 // 允许开发者通过环境变量修改 dev server / 日志端口，无需改代码
@@ -83,7 +83,7 @@ const targetArch = process.env.ELECTRON_BUILDER_ARCH || process.env.npm_config_t
 module.exports = {
   packagerConfig: {
     asar: {
-      unpack: '**/node_modules/{node-pty,bcrypt,better-sqlite3,@mapbox,detect-libc,prebuild-install,node-gyp-build,bindings,web-tree-sitter,tree-sitter-bash}/**/*',
+      unpack: '**/node_modules/{node-pty,bcrypt,better-sqlite3,@mapbox,detect-libc,prebuild-install,node-gyp-build,bindings,web-tree-sitter,tree-sitter-bash,@negokaz/excel-mcp-server}/**/*',
     }, // Enable asar with native modules and their dependencies unpacking
     executableName: 'Neuro',
     out: path.resolve(__dirname, 'out'),

@@ -1,7 +1,7 @@
-import type { Configuration } from 'webpack';
-import { rules } from './webpack.rules';
-import { plugins } from './webpack.plugins';
 import path from 'path';
+import type { Configuration } from 'webpack';
+import { plugins } from './webpack.plugins';
+import { rules } from './webpack.rules';
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
@@ -42,6 +42,7 @@ export const mainConfig: Configuration = {
     'bcrypt': 'commonjs bcrypt',
     'better-sqlite3': 'commonjs better-sqlite3',
     'node-pty': 'commonjs node-pty',
+    '@negokaz/excel-mcp-server': 'commonjs @negokaz/excel-mcp-server',
     // tree-sitter 相关依赖需要作为外部模块，避免 webpack 处理 .wasm 文件
     // tree-sitter dependencies need to be external to avoid webpack processing .wasm files
     'tree-sitter': 'commonjs tree-sitter',
