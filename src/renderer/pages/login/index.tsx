@@ -1,4 +1,3 @@
-import googleLogo from '@renderer/assets/logos/google.svg';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -16,7 +15,7 @@ const REMEMBER_KEY = 'rememberedEmail';
 const LoginPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { status, login, loginWithGoogle } = useAuth();
+  const { status, login } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -142,13 +141,6 @@ const LoginPage: React.FC = () => {
     [login, navigate, password, showMessage, t, username]
   );
 
-  const handleGoogleLogin = useCallback(() => {
-    loginWithGoogle().catch((error) => {
-      console.error('Google login failed:', error);
-      showMessage({ type: 'error', text: t('login.errors.networkError') });
-    });
-  }, [loginWithGoogle, showMessage, t]);
-
   if (status === 'checking') {
     return <AppLoader />;
   }
@@ -159,17 +151,6 @@ const LoginPage: React.FC = () => {
         <div className='login-page__header'>
           <h1 className='login-page__title'>{t('login.brand')}</h1>
           <p className='login-page__subtitle'>{t('login.subtitle')}</p>
-        </div>
-
-        <div className='login-page__social-login'>
-          <button type='button' className='login-page__google-btn' onClick={handleGoogleLogin}>
-            <img src={googleLogo} alt='Google' className='login-page__google-icon' />
-            <span>{t('login.googleSignIn')}</span>
-          </button>
-        </div>
-
-        <div className='login-page__divider'>
-          <span>{t('login.divider')}</span>
         </div>
 
         <form className='login-page__form' onSubmit={handleSubmit}>

@@ -111,10 +111,24 @@ export class GeminiAgentManager extends BaseAgentManager<{
         .forEach((server: IMcpServer) => {
           // 只处理 stdio 类型的传输方式，因为 aioncli-core 只支持这种类型
           if (server.transport.type === 'stdio') {
+            let command = server.transport.command;
+            const env = { ...(server.transport.env || {}) };
+
+            // [Dev Fix] 개발 모드에서 process.execPath(Electron)를 실행하면 독 아이콘이 추가로 뜨는 문제가 있음
+            // 개발 모드에서는 'node'가 PATH에 있으므로 바로 node를 사용하여 실행
+            // [Dev Fix] Running process.execPath (Electron) in dev mode creates an extra dock icon
+            // In dev mode, 'node' is in PATH, so use 'node' directly
+            if (process.env.NODE_ENV === 'development' && command === process.execPath) {
+              console.log('[GeminiAgentManager] Dev mode detected, swapping process.execPath to node for MCP server:', server.name);
+              command = 'node';
+              // node로 실행하므로 ELECTRON_RUN_AS_NODE는 불필요하지만 있어도 무방함
+              // Since running as node, ELECTRON_RUN_AS_NODE is unnecessary but harmless
+            }
+
             mcpConfig[server.name] = {
-              command: server.transport.command,
+              command: command,
               args: server.transport.args || [],
-              env: server.transport.env || {},
+              env: env,
               description: server.description,
             };
           }

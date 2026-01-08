@@ -51,18 +51,20 @@ const WorkspaceSelectModal: React.FC<WorkspaceSelectModalProps> = ({ userId, vis
   return (
     <AionModal visible={visible && workspaces.length > 1} header='Select Workspace' footer={null} onCancel={onCancel} size='small'>
       <Spin loading={loading} style={{ width: '100%' }}>
-        <List
-          dataSource={workspaces}
-          render={(item, index) => (
-            <List.Item key={item.id} actionLayout='vertical'>
-              <Button type='text' style={{ width: '100%', textAlign: 'left', height: 'auto', padding: '12px' }} onClick={() => onSelect(item.id)}>
-                <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{item.name}</div>
-                {item.description && <div style={{ color: '#888', fontSize: '12px' }}>{item.description}</div>}
-              </Button>
-            </List.Item>
-          )}
-        />
-        {!loading && workspaces.length === 0 && <div style={{ textAlign: 'center', padding: '20px', color: '#888' }}>No workspaces found.</div>}
+        <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '4px' }}>
+          <List
+            dataSource={workspaces}
+            render={(item, index) => (
+              <List.Item key={item.id} actionLayout='vertical'>
+                <Button type='text' style={{ width: '100%', textAlign: 'left', height: 'auto', padding: '12px' }} onClick={() => onSelect(item.id)}>
+                  <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{item.name}</div>
+                  {item.description && <div style={{ color: '#888', fontSize: '12px' }}>{item.description}</div>}
+                </Button>
+              </List.Item>
+            )}
+          />
+          {!loading && workspaces.length === 0 && <div style={{ textAlign: 'center', padding: '20px', color: '#888' }}>No workspaces found.</div>}
+        </div>
       </Spin>
     </AionModal>
   );
