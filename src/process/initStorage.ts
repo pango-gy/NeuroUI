@@ -347,6 +347,17 @@ const getDefaultMcpServers = (): IMcpServer[] => {
       transportType: 'streamable_http' as const,
     },
     {
+      name: 'naver-ads-mcp',
+      description: 'Naver Ads MCP Server',
+      config: {
+        url: process.env.VITE_NAVER_ADS_MCP_URL || 'https://mcp.pango-gy.com/naver-ads/mcp',
+        headers: {
+          Authorization: 'Bearer <token>',
+        },
+      },
+      transportType: 'streamable_http' as const,
+    },
+    {
       name: 'excel-mcp-server',
       description: 'Excel MCP Server',
       enabled: true,

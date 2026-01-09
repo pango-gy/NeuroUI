@@ -319,6 +319,7 @@ jobs:
           # MCP Server URLs
           VITE_GOOGLE_ADS_MCP_URL: ${{ secrets.VITE_GOOGLE_ADS_MCP_URL }}
           VITE_GOOGLE_ANALYTICS_MCP_URL: ${{ secrets.VITE_GOOGLE_ANALYTICS_MCP_URL }}
+          VITE_NAVER_ADS_MCP_URL: ${{ secrets.VITE_NAVER_ADS_MCP_URL }}
           # Proxy Base URL (Key Vending)
           VITE_PROXY_BASE_URL: ${{ secrets.VITE_PROXY_BASE_URL }}
 
@@ -371,6 +372,7 @@ jobs:
           # MCP Server URLs
           VITE_GOOGLE_ADS_MCP_URL: ${{ secrets.VITE_GOOGLE_ADS_MCP_URL }}
           VITE_GOOGLE_ANALYTICS_MCP_URL: ${{ secrets.VITE_GOOGLE_ANALYTICS_MCP_URL }}
+          VITE_NAVER_ADS_MCP_URL: ${{ secrets.VITE_NAVER_ADS_MCP_URL }}
           # Proxy Base URL (Key Vending)
           VITE_PROXY_BASE_URL: ${{ secrets.VITE_PROXY_BASE_URL }}
 

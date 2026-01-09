@@ -78,6 +78,7 @@ export class McpService {
     const platformMcpUrls: Record<string, string | undefined> = {
       'google-ads-mcp': process.env.VITE_GOOGLE_ADS_MCP_URL,
       'google-analytics-mcp': process.env.VITE_GOOGLE_ANALYTICS_MCP_URL,
+      'naver-ads-mcp': process.env.VITE_NAVER_ADS_MCP_URL,
     };
 
     // transport 타입에 따라 헤더 및 URL 확인

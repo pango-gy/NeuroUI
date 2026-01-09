@@ -24,6 +24,11 @@ const MCP_PLATFORMS = {
     url: process.env.VITE_GOOGLE_ANALYTICS_MCP_URL || 'http://localhost:3001/google-analytics/mcp',
     description: 'Google Analytics MCP Server',
   },
+  'naver-ads-mcp': {
+    platform: 'naver_ads',
+    url: process.env.VITE_NAVER_ADS_MCP_URL || 'https://mcp.pango-gy.com/naver-ads/mcp',
+    description: 'Naver Ads MCP Server',
+  },
 } as const;
 
 type McpServerName = keyof typeof MCP_PLATFORMS;
@@ -336,6 +341,33 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
                     }
                   } catch (syncError) {
                     console.error('[Auth] Error during MCP sync:', syncError);
+                  }
+
+                  // 5.1. 활성화된 MCP 서버들의 연결 테스트 실행 (status를 connected로 업데이트)
+                  for (const server of updatedServers.filter((s) => s.enabled)) {
+                    try {
+                      console.log(`[Auth] Testing connection for ${server.name}...`);
+                      const testResponse = await ipcBridge.mcpService.testMcpConnection.invoke(server);
+                      if (testResponse.success && testResponse.data?.success) {
+                        // 연결 성공 시 status 업데이트
+                        const serverIndex = newConfig.findIndex((s) => s.id === server.id);
+                        if (serverIndex !== -1) {
+                          newConfig[serverIndex] = {
+                            ...newConfig[serverIndex],
+                            status: 'connected',
+                            tools: testResponse.data.tools?.map((t) => ({ name: t.name, description: t.description })),
+                            lastConnected: Date.now(),
+                          };
+                          await ConfigStorage.set('mcp.config', newConfig);
+                          window.dispatchEvent(new Event('mcp-config-changed'));
+                          console.log(`[Auth] ${server.name} connection test passed, status updated to connected`);
+                        }
+                      } else {
+                        console.warn(`[Auth] ${server.name} connection test failed:`, testResponse.data?.error);
+                      }
+                    } catch (testError) {
+                      console.error(`[Auth] Error testing ${server.name}:`, testError);
+                    }
                   }
                 }
 
