@@ -358,6 +358,16 @@ const getDefaultMcpServers = (): IMcpServer[] => {
       transportType: 'streamable_http' as const,
     },
     {
+      name: 'naver-openapi-mcp',
+      description: 'Naver Open API MCP Server',
+      enabled: true, // 항상 활성화 - Firestore connections와 무관
+      config: {
+        url: process.env.VITE_NAVER_OPENAPI_MCP_URL || 'http://localhost:3000/naver-openapi/mcp',
+        headers: {},
+      },
+      transportType: 'streamable_http' as const,
+    },
+    {
       name: 'excel-mcp-server',
       description: 'Excel MCP Server',
       enabled: true,
