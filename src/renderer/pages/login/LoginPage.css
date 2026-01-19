@@ -9,6 +9,15 @@
   overflow: hidden;
 }
 
+/* Window controls for frameless window (Windows/Linux) */
+.login-page__window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 1000;
+  -webkit-app-region: no-drag;
+}
+
 body.login-page-active {
   overflow: hidden;
 }

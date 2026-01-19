@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import AppLoader from '../../components/AppLoader';
+import WindowControls from '../../components/WindowControls';
 import { useAuth } from '../../context/AuthContext';
 import './LoginPage.css';
 
@@ -141,12 +142,23 @@ const LoginPage: React.FC = () => {
     [login, navigate, password, showMessage, t, username]
   );
 
+  // Windows/Linux에서 frameless window 윈도우 컨트롤 표시 여부
+  const isDesktopRuntime = typeof window !== 'undefined' && Boolean(window.electronAPI);
+  const isMacRuntime = isDesktopRuntime && typeof navigator !== 'undefined' && /mac/i.test(navigator.userAgent);
+  const showWindowControls = isDesktopRuntime && !isMacRuntime;
+
   if (status === 'checking') {
     return <AppLoader />;
   }
 
   return (
     <div className='login-page'>
+      {/* Windows/Linux frameless window controls */}
+      {showWindowControls && (
+        <div className='login-page__window-controls'>
+          <WindowControls />
+        </div>
+      )}
       <div className='login-page__card'>
         <div className='login-page__header'>
           <h1 className='login-page__title'>{t('login.brand')}</h1>
