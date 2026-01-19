@@ -175,6 +175,27 @@ body[arco-theme='dark'] .arco-message-error {
   background-color: var(--color-fill-3) !important;
 }
 
+/* Workspace tree truncate styles - ensure file names truncate properly */
+.workspace-tree {
+  overflow: hidden;
+}
+
+.workspace-tree .arco-tree-node {
+  overflow: hidden;
+}
+
+.workspace-tree .arco-tree-node-title {
+  overflow: hidden;
+  min-width: 0;
+  flex: 1;
+}
+
+.workspace-tree .arco-tree-node-title-text {
+  overflow: hidden;
+  min-width: 0;
+  flex: 1;
+}
+
 /* Alert styles - content is now displayed below the Alert card, so these rules are no longer needed */
 /* Alert 样式 - 内容现在显示在 Alert 卡片下方，因此不再需要这些规则 */
 

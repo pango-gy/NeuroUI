@@ -7,6 +7,7 @@ import HorizontalFileList from '@/renderer/components/HorizontalFileList';
 import SendBox from '@/renderer/components/sendbox';
 import ShimmerText from '@/renderer/components/ShimmerText';
 import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/ThoughtDisplay';
+import { useConversationContext } from '@/renderer/context/ConversationContext';
 import { useLatestRef } from '@/renderer/hooks/useLatestRef';
 import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/useSendBoxDraft';
 import { createSetUploadFile, useSendBoxFiles } from '@/renderer/hooks/useSendBoxFiles';
@@ -153,6 +154,7 @@ const AcpSendBox: React.FC<{
 }> = ({ conversation_id, backend }) => {
   const { thought, running, acpStatus, aiProcessing, setAiProcessing } = useAcpMessage(conversation_id);
   const { t } = useTranslation();
+  const { workspace } = useConversationContext();
   const { atPath, uploadFile, setAtPath, setUploadFile, content, setContent } = useSendBoxDraft(conversation_id);
   const { setSendBoxHandler } = usePreviewContext();
 
@@ -357,63 +359,67 @@ const AcpSendBox: React.FC<{
         className='z-10'
         onFilesAdded={handleFilesAdded}
         supportedExts={allSupportedExts}
+        disableFileAttachment={!!workspace}
         tools={
-          <Button
-            type='secondary'
-            shape='circle'
-            icon={<Plus theme='outline' size='14' strokeWidth={2} fill={iconColors.primary} />}
-            onClick={() => {
-              void ipcBridge.dialog.showOpen.invoke({ properties: ['openFile', 'multiSelections'] }).then((files) => {
-                if (files && files.length > 0) {
-                  // 파일명 추출 헬퍼
-                  const getFileName = (path: string) => path.split(/[\\/]/).pop() || path;
+          // workspace가 있으면 + 버튼 숨김 (readFile 도구로 파일 접근 가능)
+          workspace ? null : (
+            <Button
+              type='secondary'
+              shape='circle'
+              icon={<Plus theme='outline' size='14' strokeWidth={2} fill={iconColors.primary} />}
+              onClick={() => {
+                void ipcBridge.dialog.showOpen.invoke({ properties: ['openFile', 'multiSelections'] }).then((files) => {
+                  if (files && files.length > 0) {
+                    // 파일명 추출 헬퍼
+                    const getFileName = (path: string) => path.split(/[\\/]/).pop() || path;
 
-                  // workspace 파일 목록도 가져와서 체크
-                  emitter.emit('acp.workspace.files.get', (workspaceFileNames: string[]) => {
-                    // 각각의 중복 원인을 구분
-                    const atPathFileNames = atPath.map((item) => getFileName(typeof item === 'string' ? item : item.path));
-                    const uploadFileNames = new Set(uploadFile.map(getFileName));
-                    const attachedFileNames = new Set([...uploadFileNames, ...atPathFileNames]);
-                    const workspaceFileNamesSet = new Set(workspaceFileNames);
+                    // workspace 파일 목록도 가져와서 체크
+                    emitter.emit('acp.workspace.files.get', (workspaceFileNames: string[]) => {
+                      // 각각의 중복 원인을 구분
+                      const atPathFileNames = atPath.map((item) => getFileName(typeof item === 'string' ? item : item.path));
+                      const uploadFileNames = new Set(uploadFile.map(getFileName));
+                      const attachedFileNames = new Set([...uploadFileNames, ...atPathFileNames]);
+                      const workspaceFileNamesSet = new Set(workspaceFileNames);
 
-                    const newFiles: string[] = [];
-                    const workspaceDuplicates: string[] = [];
-                    const attachedDuplicates: string[] = [];
+                      const newFiles: string[] = [];
+                      const workspaceDuplicates: string[] = [];
+                      const attachedDuplicates: string[] = [];
 
-                    for (const f of files) {
-                      const fileName = getFileName(f);
-                      if (attachedFileNames.has(fileName)) {
-                        attachedDuplicates.push(f);
-                      } else if (workspaceFileNamesSet.has(fileName)) {
-                        workspaceDuplicates.push(f);
-                      } else {
-                        newFiles.push(f);
+                      for (const f of files) {
+                        const fileName = getFileName(f);
+                        if (attachedFileNames.has(fileName)) {
+                          attachedDuplicates.push(f);
+                        } else if (workspaceFileNamesSet.has(fileName)) {
+                          workspaceDuplicates.push(f);
+                        } else {
+                          newFiles.push(f);
+                        }
                       }
-                    }
 
-                    // 중복 메시지 표시
-                    if (workspaceDuplicates.length > 0 && attachedDuplicates.length === 0 && newFiles.length === 0) {
-                      Message.warning(t('messages.workspaceAllFilesSkipped'));
-                    } else if (attachedDuplicates.length > 0 && workspaceDuplicates.length === 0 && newFiles.length === 0) {
-                      Message.warning(t('messages.allFilesDuplicate'));
-                    } else if ((workspaceDuplicates.length > 0 || attachedDuplicates.length > 0) && newFiles.length === 0) {
-                      Message.warning(t('messages.allFilesDuplicate'));
-                    } else if (workspaceDuplicates.length > 0 && newFiles.length > 0) {
-                      const duplicateNames = workspaceDuplicates.map(getFileName).join(', ');
-                      Message.warning(t('messages.workspaceFilesSkipped', { files: duplicateNames }));
-                    } else if (attachedDuplicates.length > 0 && newFiles.length > 0) {
-                      const duplicateNames = attachedDuplicates.map(getFileName).join(', ');
-                      Message.warning(t('messages.duplicateFilesIgnored', { files: duplicateNames }));
-                    }
+                      // 중복 메시지 표시
+                      if (workspaceDuplicates.length > 0 && attachedDuplicates.length === 0 && newFiles.length === 0) {
+                        Message.warning(t('messages.workspaceAllFilesSkipped'));
+                      } else if (attachedDuplicates.length > 0 && workspaceDuplicates.length === 0 && newFiles.length === 0) {
+                        Message.warning(t('messages.allFilesDuplicate'));
+                      } else if ((workspaceDuplicates.length > 0 || attachedDuplicates.length > 0) && newFiles.length === 0) {
+                        Message.warning(t('messages.allFilesDuplicate'));
+                      } else if (workspaceDuplicates.length > 0 && newFiles.length > 0) {
+                        const duplicateNames = workspaceDuplicates.map(getFileName).join(', ');
+                        Message.warning(t('messages.workspaceFilesSkipped', { files: duplicateNames }));
+                      } else if (attachedDuplicates.length > 0 && newFiles.length > 0) {
+                        const duplicateNames = attachedDuplicates.map(getFileName).join(', ');
+                        Message.warning(t('messages.duplicateFilesIgnored', { files: duplicateNames }));
+                      }
 
-                    if (newFiles.length > 0) {
-                      setUploadFile([...uploadFile, ...newFiles]);
-                    }
-                  });
-                }
-              });
-            }}
-          />
+                      if (newFiles.length > 0) {
+                        setUploadFile([...uploadFile, ...newFiles]);
+                      }
+                    });
+                  }
+                });
+              }}
+            />
+          )
         }
         prefix={
           <>

@@ -13,7 +13,7 @@ import { iconColors } from '@/renderer/theme/colors';
 import { emitter } from '@/renderer/utils/emitter';
 import { Checkbox, Empty, Input, Message, Modal, Tooltip, Tree } from '@arco-design/web-react';
 import type { RefInputType } from '@arco-design/web-react/es/Input/interface';
-import { FileAddition, FileText, FolderOpen, Refresh, Search } from '@icon-park/react';
+import { Delete, FileAddition, FileText, FolderOpen, Refresh, Search } from '@icon-park/react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useWorkspaceDragImport } from './hooks/useWorkspaceDragImport';
@@ -230,10 +230,11 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({ conversation_id, workspace, e
         style={
           dragImportHook.isDragging
             ? {
-                border: '1px dashed rgb(var(--primary-6))',
+                border: dragImportHook.hasDirectory ? '1px dashed rgb(var(--danger-6))' : '1px dashed rgb(var(--primary-6))',
                 borderRadius: '18px',
-                backgroundColor: 'rgba(var(--primary-1), 0.25)',
+                backgroundColor: dragImportHook.hasDirectory ? 'rgba(var(--danger-1), 0.25)' : 'rgba(var(--primary-1), 0.25)',
                 transition: 'all 0.2s ease',
+                cursor: dragImportHook.hasDirectory ? 'not-allowed' : 'copy',
               }
             : undefined
         }
@@ -243,26 +244,43 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({ conversation_id, workspace, e
             <div
               className='w-full max-w-480px text-center text-white rounded-16px px-32px py-28px'
               style={{
-                background: 'rgba(6, 11, 25, 0.85)',
-                border: '1px dashed rgb(var(--primary-6))',
+                background: dragImportHook.hasDirectory ? 'rgba(220, 38, 38, 0.9)' : 'rgba(6, 11, 25, 0.85)',
+                border: dragImportHook.hasDirectory ? '1px dashed rgba(255, 255, 255, 0.5)' : '1px dashed rgb(var(--primary-6))',
                 boxShadow: '0 20px 60px rgba(15, 23, 42, 0.45)',
               }}
             >
-              <div className='text-18px font-semibold mb-8px'>
-                {t('conversation.workspace.dragOverlayTitle', {
-                  defaultValue: 'Drop to import',
-                })}
-              </div>
-              <div className='text-14px opacity-90 mb-4px'>
-                {t('conversation.workspace.dragOverlayDesc', {
-                  defaultValue: 'Drag files or folders here to copy them into this workspace.',
-                })}
-              </div>
-              <div className='text-12px opacity-70'>
-                {t('conversation.workspace.dragOverlayHint', {
-                  defaultValue: 'Tip: drop anywhere to import into the selected folder.',
-                })}
-              </div>
+              {dragImportHook.hasDirectory ? (
+                <>
+                  <div className='text-18px font-semibold mb-8px'>
+                    {t('conversation.workspace.dragFolderNotAllowed', {
+                      defaultValue: '지원하지 않는 형식입니다',
+                    })}
+                  </div>
+                  <div className='text-14px opacity-90'>
+                    {t('conversation.workspace.dragFolderNotAllowedDesc', {
+                      defaultValue: '폴더나 알 수 없는 파일은 가져올 수 없습니다.',
+                    })}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className='text-18px font-semibold mb-8px'>
+                    {t('conversation.workspace.dragOverlayTitle', {
+                      defaultValue: 'Drop to import',
+                    })}
+                  </div>
+                  <div className='text-14px opacity-90 mb-4px'>
+                    {t('conversation.workspace.dragOverlayDesc', {
+                      defaultValue: 'Drag files here to copy them into this workspace.',
+                    })}
+                  </div>
+                  <div className='text-12px opacity-70'>
+                    {t('conversation.workspace.dragOverlayHint', {
+                      defaultValue: 'Tip: drop anywhere to import into the selected folder.',
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -559,16 +577,6 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({ conversation_id, workspace, e
                 >
                   {t('conversation.workspace.contextMenu.rename')}
                 </button>
-                <div className='h-1px bg-3 my-2px'></div>
-                <button
-                  type='button'
-                  className={menuButtonBase}
-                  onClick={() => {
-                    fileOpsHook.handleAddToChat(contextMenuNode);
-                  }}
-                >
-                  {t('conversation.workspace.contextMenu.addToChat')}
-                </button>
               </div>
             </div>
           )}
@@ -607,13 +615,8 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({ conversation_id, workspace, e
 
                 return (
                   <span
-                    className='flex items-center gap-4px'
+                    className='flex items-center gap-4px w-full min-w-0 group'
                     style={{ color: 'inherit' }}
-                    onDoubleClick={() => {
-                      if (isFile) {
-                        fileOpsHook.handleAddToChat(node.dataRef as IDirOrFile);
-                      }
-                    }}
                     onContextMenu={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -626,8 +629,20 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({ conversation_id, workspace, e
                       });
                     }}
                   >
-                    {node.title}
-                    {isPasteTarget && <span className='ml-1 text-xs text-blue-700 font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded'>PASTE</span>}
+                    <span className='flex-1 min-w-0 truncate'>{node.title}</span>
+                    {isPasteTarget && <span className='flex-shrink-0 ml-1 text-xs text-blue-700 font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded'>PASTE</span>}
+                    {/* 삭제 버튼: hover 시에만 표시 */}
+                    <Tooltip content={t('common.delete')} mini>
+                      <span
+                        className='flex-shrink-0 ml-1 cursor-pointer opacity-0 group-hover:opacity-100 text-t-tertiary hover:text-[rgb(var(--danger-6))] transition-all flex items-center'
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          fileOpsHook.handleDeleteNode(node.dataRef as IDirOrFile);
+                        }}
+                      >
+                        <Delete theme='outline' size='14' fill='currentColor' />
+                      </span>
+                    </Tooltip>
                   </span>
                 );
               }}

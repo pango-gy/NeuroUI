@@ -32,8 +32,7 @@ import { iconColors } from '@/renderer/theme/colors';
 import { hasSpecificModelCapability } from '@/renderer/utils/modelCapabilities';
 import type { AcpBackend } from '@/types/acpTypes';
 import { Button, ConfigProvider, Dropdown, Input, Menu, Message, Tooltip } from '@arco-design/web-react';
-import { IconClose } from '@arco-design/web-react/icon';
-import { ArrowUp, FolderOpen, Plus, UploadOne } from '@icon-park/react';
+import { ArrowUp, Plus, UploadOne } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -666,7 +665,7 @@ const Guid: React.FC = () => {
             <div className={styles.actionRow}>
               <div className={`${styles.actionTools} flex items-center gap-10px`}>
                 <Dropdown
-                  trigger='hover'
+                  trigger='click'
                   onVisibleChange={setIsPlusDropdownOpen}
                   droplist={
                     <Menu
@@ -683,17 +682,6 @@ const Guid: React.FC = () => {
                             .catch((error) => {
                               console.error('Failed to open file dialog:', error);
                             });
-                        } else if (key === 'workspace') {
-                          ipcBridge.dialog.showOpen
-                            .invoke({ properties: ['openDirectory'] })
-                            .then((files) => {
-                              if (files && files[0]) {
-                                setDir(files[0]);
-                              }
-                            })
-                            .catch((error) => {
-                              console.error('Failed to open directory dialog:', error);
-                            });
                         }
                       }}
                     >
@@ -701,12 +689,6 @@ const Guid: React.FC = () => {
                         <div className='flex items-center gap-8px'>
                           <UploadOne theme='outline' size='16' fill={iconColors.secondary} style={{ lineHeight: 0 }} />
                           <span>{t('conversation.welcome.uploadFile')}</span>
-                        </div>
-                      </Menu.Item>
-                      <Menu.Item key='workspace'>
-                        <div className='flex items-center gap-8px'>
-                          <FolderOpen theme='outline' size='16' fill={iconColors.secondary} style={{ lineHeight: 0 }} />
-                          <span>{t('conversation.welcome.specifyWorkspace')}</span>
                         </div>
                       </Menu.Item>
                     </Menu>
@@ -814,19 +796,6 @@ const Guid: React.FC = () => {
                 />
               </div>
             </div>
-            {dir && (
-              <div className='flex items-center gap-6px mt-12px text-13px text-t-secondary'>
-                <FolderOpen className='flex-shrink-0' theme='outline' size='16' fill={iconColors.secondary} style={{ lineHeight: 0 }} />
-                <Tooltip content={dir} position='top'>
-                  <span className='truncate'>
-                    {t('conversation.welcome.currentWorkspace')}: {dir}
-                  </span>
-                </Tooltip>
-                <Tooltip content={t('conversation.welcome.clearWorkspace')} position='top'>
-                  <IconClose className='hover:text-[rgb(var(--danger-6))] hover:bg-3 transition-colors' strokeWidth={3} style={{ fontSize: 16 }} onClick={() => setDir('')} />
-                </Tooltip>
-              </div>
-            )}
           </div>
         </div>
       </div>

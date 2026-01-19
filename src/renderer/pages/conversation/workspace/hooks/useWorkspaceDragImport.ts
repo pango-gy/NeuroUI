@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useCallback, useRef, useState } from 'react';
-import type { DragEvent } from 'react';
-import type { TFunction } from 'i18next';
 import { ipcBridge } from '@/common';
 import { FileService } from '@/renderer/services/FileService';
+import type { TFunction } from 'i18next';
+import type { DragEvent } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { MessageApi } from '../types';
 
 interface UseWorkspaceDragImportOptions {
@@ -40,29 +40,78 @@ const dedupeItems = (items: DroppedItem[]): DroppedItem[] => {
 
 export function useWorkspaceDragImport({ onFilesDropped, messageApi, t }: UseWorkspaceDragImportOptions) {
   const [isDragging, setIsDragging] = useState(false);
+  const [hasDirectory, setHasDirectory] = useState(false);
   const dragCounterRef = useRef(0);
+  const hasDirectoryRef = useRef(false);
+  const hasCheckedRef = useRef(false); // 이미 체크 완료 여부 (성능 최적화)
 
   const resetDragState = useCallback(() => {
     dragCounterRef.current = 0;
+    hasDirectoryRef.current = false;
+    hasCheckedRef.current = false;
     setIsDragging(false);
+    setHasDirectory(false);
   }, []);
 
-  const handleDragEnter = useCallback((event: DragEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    dragCounterRef.current += 1;
-    setIsDragging(true);
+  /**
+   * item.type이 비어있으면 폴더로 간주 (표준 스펙 - dragover에서 사용 가능)
+   * Empty item.type means directory (standard spec - usable in dragover)
+   */
+  const checkForDirectoriesByType = useCallback((dataTransfer: DataTransfer | null): boolean => {
+    if (!dataTransfer?.items) return false;
+
+    for (let i = 0; i < dataTransfer.items.length; i++) {
+      const item = dataTransfer.items[i];
+      // 파일인데 MIME type이 비어있으면 폴더
+      if (item.kind === 'file' && item.type === '') {
+        return true;
+      }
+    }
+    return false;
   }, []);
+
+  const handleDragEnter = useCallback(
+    (event: DragEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dragCounterRef.current += 1;
+      setIsDragging(true);
+
+      // 아직 체크 안 했으면 체크
+      if (!hasCheckedRef.current) {
+        const containsDir = checkForDirectoriesByType(event.dataTransfer);
+        hasDirectoryRef.current = containsDir;
+        hasCheckedRef.current = true;
+        setHasDirectory(containsDir);
+      }
+    },
+    [checkForDirectoriesByType]
+  );
 
   const handleDragOver = useCallback(
     (event: DragEvent) => {
       event.preventDefault();
       event.stopPropagation();
+
+      // 아직 체크 안 했으면 한 번만 체크 (첫 dragenter에서 놓쳤을 경우)
+      if (!hasCheckedRef.current) {
+        const containsDir = checkForDirectoriesByType(event.dataTransfer);
+        hasDirectoryRef.current = containsDir;
+        hasCheckedRef.current = true;
+        setHasDirectory(containsDir);
+      }
+
+      if (hasDirectoryRef.current && event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'none'; // 🚫 커서
+      } else if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'copy';
+      }
+
       if (!isDragging) {
         setIsDragging(true);
       }
     },
-    [isDragging]
+    [isDragging, checkForDirectoriesByType]
   );
 
   const handleDragLeave = useCallback((event: DragEvent) => {
@@ -112,9 +161,22 @@ export function useWorkspaceDragImport({ onFilesDropped, messageApi, t }: UseWor
     async (event: DragEvent) => {
       event.preventDefault();
       event.stopPropagation();
-      resetDragState();
 
       const dataTransfer = event.dataTransfer || event.nativeEvent?.dataTransfer;
+
+      // 폴더 드롭 차단
+      if (checkForDirectoriesByType(dataTransfer)) {
+        resetDragState();
+        messageApi.warning(
+          t('conversation.workspace.dragFolderNotSupported', {
+            defaultValue: '폴더는 지원하지 않습니다. 파일만 드래그해주세요.',
+          })
+        );
+        return;
+      }
+
+      resetDragState();
+
       const itemsWithPath: DroppedItem[] = [];
       const filesWithoutPath: File[] = [];
 
@@ -193,7 +255,7 @@ export function useWorkspaceDragImport({ onFilesDropped, messageApi, t }: UseWor
         );
       }
     },
-    [resolveDroppedItems, createTempItemsFromFiles, messageApi, onFilesDropped, resetDragState, t]
+    [resolveDroppedItems, createTempItemsFromFiles, messageApi, onFilesDropped, resetDragState, t, checkForDirectoriesByType]
   );
 
   const dragHandlers = {
@@ -205,6 +267,7 @@ export function useWorkspaceDragImport({ onFilesDropped, messageApi, t }: UseWor
 
   return {
     isDragging,
+    hasDirectory, // 폴더 드래그 감지 상태
     dragHandlers,
   };
 }

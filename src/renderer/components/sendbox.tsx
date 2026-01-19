@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { usePreviewContext } from '@/renderer/pages/conversation/preview';
 import { Button, Input, Message, Tag } from '@arco-design/web-react';
 import { ArrowUp, CloseSmall } from '@icon-park/react';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCompositionInput } from '../hooks/useCompositionInput';
 import { useDragUpload } from '../hooks/useDragUpload';
+import { useLatestRef } from '../hooks/useLatestRef';
 import { usePasteService } from '../hooks/usePasteService';
 import type { FileMetadata } from '../services/FileService';
 import { allSupportedExts } from '../services/FileService';
-import { usePreviewContext } from '@/renderer/pages/conversation/preview';
-import { useLatestRef } from '../hooks/useLatestRef';
 
 const constVoid = (): void => undefined;
 // 临界值：超过该字符数直接切换至多行模式，避免为超长文本做昂贵的宽度测量
@@ -37,7 +37,8 @@ const SendBox: React.FC<{
   defaultMultiLine?: boolean;
   lockMultiLine?: boolean;
   sendButtonPrefix?: React.ReactNode;
-}> = ({ onSend, onStop, prefix, className, loading, tools, disabled, placeholder, value: input = '', onChange: setInput = constVoid, onFilesAdded, supportedExts = allSupportedExts, defaultMultiLine = false, lockMultiLine = false, sendButtonPrefix }) => {
+  disableFileAttachment?: boolean; // workspace가 있을 때 파일 첨부 비활성화
+}> = ({ onSend, onStop, prefix, className, loading, tools, disabled, placeholder, value: input = '', onChange: setInput = constVoid, onFilesAdded, supportedExts = allSupportedExts, defaultMultiLine = false, lockMultiLine = false, sendButtonPrefix, disableFileAttachment = false }) => {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [isSingleLine, setIsSingleLine] = useState(!defaultMultiLine);
@@ -150,10 +151,10 @@ const SendBox: React.FC<{
     return () => cancelAnimationFrame(frame);
   }, [input, lockMultiLine]);
 
-  // 使用拖拽 hook
+  // 使用拖拽 hook (파일 첨부 비활성화 시 onFilesAdded를 undefined로)
   const { isFileDragging, dragHandlers } = useDragUpload({
     supportedExts,
-    onFilesAdded,
+    onFilesAdded: disableFileAttachment ? undefined : onFilesAdded,
   });
 
   const [message, context] = Message.useMessage();
@@ -161,10 +162,10 @@ const SendBox: React.FC<{
   // 使用共享的输入法合成处理
   const { compositionHandlers, createKeyDownHandler } = useCompositionInput();
 
-  // 使用共享的PasteService集成
+  // 使用共享的PasteService集成 (파일 첨부 비활성화 시 onFilesAdded를 undefined로)
   const { onPaste, onFocus } = usePasteService({
     supportedExts,
-    onFilesAdded,
+    onFilesAdded: disableFileAttachment ? undefined : onFilesAdded,
     onTextPaste: (text: string) => {
       // 处理清理后的文本粘贴，在当前光标位置插入文本而不是替换整个内容
       const textarea = document.activeElement as HTMLTextAreaElement;

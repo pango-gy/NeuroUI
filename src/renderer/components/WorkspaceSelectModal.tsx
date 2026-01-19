@@ -90,8 +90,6 @@ const WorkspaceSelectModal: React.FC<WorkspaceSelectModalProps> = ({ userId, vis
             style={{
               maxHeight: '400px',
               overflowY: 'auto',
-              marginRight: '-8px',
-              paddingRight: '8px',
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -102,6 +100,7 @@ const WorkspaceSelectModal: React.FC<WorkspaceSelectModalProps> = ({ userId, vis
                   onClick={() => onSelect(item.id)}
                   style={{
                     width: '100%',
+                    boxSizing: 'border-box',
                     textAlign: 'left',
                     padding: '14px 16px',
                     borderRadius: '10px',
