@@ -7,11 +7,11 @@
 import { ipcBridge } from '@/common';
 import type { IDirOrFile } from '@/common/ipcBridge';
 import type { PreviewContentType } from '@/common/types/preview';
+import type { FileOrFolderItem } from '@/renderer/types/files';
 import { emitter } from '@/renderer/utils/emitter';
 import { removeWorkspaceEntry, renameWorkspaceEntry } from '@/renderer/utils/workspaceFs';
 import { useCallback } from 'react';
-import type { MessageApi, RenameModalState, DeleteModalState } from '../types';
-import type { FileOrFolderItem } from '@/renderer/types/files';
+import type { DeleteModalState, MessageApi, RenameModalState } from '../types';
 import { getPathSeparator, replacePathInList, updateTreeForRename } from '../utils/treeHelpers';
 
 interface UseWorkspaceFileOpsOptions {
@@ -223,24 +223,39 @@ export function useWorkspaceFileOps(options: UseWorkspaceFileOpsOptions) {
   }, [closeRenameModal, eventPrefix, messageApi, renameLoading, renameModal, t, waitWithTimeout, setFiles, setExpandedKeys, setSelected, selectedKeysRef, selectedNodeRef, setRenameLoading]);
 
   /**
-   * 添加到聊天
-   * Add to chat
+   * 添加到聊天 (with duplicate check against uploadFile)
+   * Add to chat (with duplicate check against uploadFile)
    */
   const handleAddToChat = useCallback(
     (nodeData: IDirOrFile | null) => {
       if (!nodeData || !nodeData.fullPath) return;
-      ensureNodeSelected(nodeData);
-      closeContextMenu();
 
-      const payload: FileOrFolderItem = {
-        path: nodeData.fullPath,
-        name: nodeData.name,
-        isFile: Boolean(nodeData.isFile),
-        relativePath: nodeData.relativePath || undefined,
-      };
+      const fileName = nodeData.name;
 
-      emitter.emit(`${eventPrefix}.selected.file.append`, [payload]);
-      messageApi.success(t('conversation.workspace.contextMenu.addedToChat'));
+      // uploadFile 목록을 가져와서 중복 체크
+      // Get uploadFile list and check for duplicates
+      emitter.emit(`${eventPrefix}.uploadFile.get`, (uploadFiles: string[]) => {
+        const uploadFileNames = uploadFiles.map((f) => f.split(/[\\/]/).pop() || f);
+
+        if (uploadFileNames.includes(fileName)) {
+          // 이미 uploadFile에 있는 파일
+          messageApi.warning(t('messages.allFilesDuplicate'));
+          return;
+        }
+
+        ensureNodeSelected(nodeData);
+        closeContextMenu();
+
+        const payload: FileOrFolderItem = {
+          path: nodeData.fullPath,
+          name: nodeData.name,
+          isFile: Boolean(nodeData.isFile),
+          relativePath: nodeData.relativePath || undefined,
+        };
+
+        emitter.emit(`${eventPrefix}.selected.file.append`, [payload]);
+        messageApi.success(t('conversation.workspace.contextMenu.addedToChat'));
+      });
     },
     [closeContextMenu, ensureNodeSelected, eventPrefix, messageApi, t]
   );

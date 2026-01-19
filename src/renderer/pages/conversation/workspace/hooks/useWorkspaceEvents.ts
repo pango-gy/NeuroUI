@@ -15,6 +15,7 @@ interface UseWorkspaceEventsOptions {
   eventPrefix: 'gemini' | 'acp' | 'codex';
 
   // Dependencies from useWorkspaceTree
+  files: IDirOrFile[];
   refreshWorkspace: () => void;
   clearSelection: () => void;
   setFiles: React.Dispatch<React.SetStateAction<IDirOrFile[]>>;
@@ -36,7 +37,7 @@ interface UseWorkspaceEventsOptions {
  * Manage all event listeners
  */
 export function useWorkspaceEvents(options: UseWorkspaceEventsOptions) {
-  const { conversation_id, eventPrefix, refreshWorkspace, clearSelection, setFiles, setSelected, setExpandedKeys, setTreeKey, selectedNodeRef, selectedKeysRef, closeContextMenu, setContextMenu, closeRenameModal, closeDeleteModal } = options;
+  const { conversation_id, eventPrefix, files, refreshWorkspace, clearSelection, setFiles, setSelected, setExpandedKeys, setTreeKey, selectedNodeRef, selectedKeysRef, closeContextMenu, setContextMenu, closeRenameModal, closeDeleteModal } = options;
 
   /**
    * 监听对话切换事件 - 重置所有状态
@@ -98,6 +99,36 @@ export function useWorkspaceEvents(options: UseWorkspaceEventsOptions) {
    * Listen to clear selected files event (after sending message)
    */
   useAddEventListener(`${eventPrefix}.selected.file.clear`, () => clearSelection(), [clearSelection]);
+
+  /**
+   * workspace 파일 목록을 다른 컴포넌트에서 조회할 수 있도록 응답
+   * Allow other components to query workspace file list for duplicate checking
+   */
+  useEffect(() => {
+    const handler = (callback: (fileNames: string[]) => void) => {
+      // 재귀적으로 모든 파일명 추출
+      const extractFileNames = (nodes: IDirOrFile[]): string[] => {
+        const names: string[] = [];
+        for (const node of nodes) {
+          if (node.isFile) {
+            names.push(node.name);
+          }
+          if (node.children) {
+            names.push(...extractFileNames(node.children));
+          }
+        }
+        return names;
+      };
+      callback(extractFileNames(files));
+    };
+
+    // 동적 이벤트 이름이므로 타입 캐스팅 필요
+    const eventName = `${eventPrefix}.workspace.files.get` as keyof typeof emitter.eventNames;
+    emitter.on(eventName as any, handler);
+    return () => {
+      emitter.off(eventName as any, handler);
+    };
+  }, [eventPrefix, files]);
 
   /**
    * 监听搜索工作空间响应

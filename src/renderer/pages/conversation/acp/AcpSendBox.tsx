@@ -1,26 +1,26 @@
 import { ipcBridge } from '@/common';
-import type { AcpBackend } from '@/types/acpTypes';
 import { transformMessage, type TMessage } from '@/common/chatLib';
 import type { IResponseMessage } from '@/common/ipcBridge';
 import { uuid } from '@/common/utils';
+import FilePreview from '@/renderer/components/FilePreview';
+import HorizontalFileList from '@/renderer/components/HorizontalFileList';
 import SendBox from '@/renderer/components/sendbox';
 import ShimmerText from '@/renderer/components/ShimmerText';
 import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/ThoughtDisplay';
+import { useLatestRef } from '@/renderer/hooks/useLatestRef';
 import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/useSendBoxDraft';
 import { createSetUploadFile, useSendBoxFiles } from '@/renderer/hooks/useSendBoxFiles';
 import { useAddOrUpdateMessage } from '@/renderer/messages/hooks';
+import { usePreviewContext } from '@/renderer/pages/conversation/preview';
 import { allSupportedExts } from '@/renderer/services/FileService';
+import { iconColors } from '@/renderer/theme/colors';
 import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { mergeFileSelectionItems } from '@/renderer/utils/fileSelection';
-import { Button, Tag } from '@arco-design/web-react';
+import type { AcpBackend } from '@/types/acpTypes';
+import { Button, Message, Tag } from '@arco-design/web-react';
 import { Plus } from '@icon-park/react';
-import { iconColors } from '@/renderer/theme/colors';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import FilePreview from '@/renderer/components/FilePreview';
-import HorizontalFileList from '@/renderer/components/HorizontalFileList';
-import { usePreviewContext } from '@/renderer/pages/conversation/preview';
-import { useLatestCallback, useLatestRef } from '@/renderer/hooks/useLatestRef';
 
 const useAcpSendBoxDraft = getSendBoxDraftHook('acp', {
   _type: 'acp',
@@ -171,6 +171,7 @@ const AcpSendBox: React.FC<{
     uploadFile,
     setAtPath,
     setUploadFile,
+    eventPrefix: 'acp',
   });
 
   // 注册预览面板添加到发送框的 handler
@@ -327,6 +328,12 @@ const AcpSendBox: React.FC<{
     }
   });
 
+  // uploadFile 목록을 다른 컴포넌트에서 조회할 수 있도록 응답
+  // Allow other components to query uploadFile list for duplicate checking
+  useAddEventListener('acp.uploadFile.get', (callback: (files: string[]) => void) => {
+    callback(uploadFile);
+  });
+
   return (
     <div className='max-w-800px w-full mx-auto flex flex-col mt-auto mb-16px'>
       <ThoughtDisplay thought={thought} />
@@ -358,7 +365,51 @@ const AcpSendBox: React.FC<{
             onClick={() => {
               void ipcBridge.dialog.showOpen.invoke({ properties: ['openFile', 'multiSelections'] }).then((files) => {
                 if (files && files.length > 0) {
-                  setUploadFile([...uploadFile, ...files]);
+                  // 파일명 추출 헬퍼
+                  const getFileName = (path: string) => path.split(/[\\/]/).pop() || path;
+
+                  // workspace 파일 목록도 가져와서 체크
+                  emitter.emit('acp.workspace.files.get', (workspaceFileNames: string[]) => {
+                    // 각각의 중복 원인을 구분
+                    const atPathFileNames = atPath.map((item) => getFileName(typeof item === 'string' ? item : item.path));
+                    const uploadFileNames = new Set(uploadFile.map(getFileName));
+                    const attachedFileNames = new Set([...uploadFileNames, ...atPathFileNames]);
+                    const workspaceFileNamesSet = new Set(workspaceFileNames);
+
+                    const newFiles: string[] = [];
+                    const workspaceDuplicates: string[] = [];
+                    const attachedDuplicates: string[] = [];
+
+                    for (const f of files) {
+                      const fileName = getFileName(f);
+                      if (attachedFileNames.has(fileName)) {
+                        attachedDuplicates.push(f);
+                      } else if (workspaceFileNamesSet.has(fileName)) {
+                        workspaceDuplicates.push(f);
+                      } else {
+                        newFiles.push(f);
+                      }
+                    }
+
+                    // 중복 메시지 표시
+                    if (workspaceDuplicates.length > 0 && attachedDuplicates.length === 0 && newFiles.length === 0) {
+                      Message.warning(t('messages.workspaceAllFilesSkipped'));
+                    } else if (attachedDuplicates.length > 0 && workspaceDuplicates.length === 0 && newFiles.length === 0) {
+                      Message.warning(t('messages.allFilesDuplicate'));
+                    } else if ((workspaceDuplicates.length > 0 || attachedDuplicates.length > 0) && newFiles.length === 0) {
+                      Message.warning(t('messages.allFilesDuplicate'));
+                    } else if (workspaceDuplicates.length > 0 && newFiles.length > 0) {
+                      const duplicateNames = workspaceDuplicates.map(getFileName).join(', ');
+                      Message.warning(t('messages.workspaceFilesSkipped', { files: duplicateNames }));
+                    } else if (attachedDuplicates.length > 0 && newFiles.length > 0) {
+                      const duplicateNames = attachedDuplicates.map(getFileName).join(', ');
+                      Message.warning(t('messages.duplicateFilesIgnored', { files: duplicateNames }));
+                    }
+
+                    if (newFiles.length > 0) {
+                      setUploadFile([...uploadFile, ...newFiles]);
+                    }
+                  });
                 }
               });
             }}

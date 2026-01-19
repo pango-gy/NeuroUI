@@ -6,7 +6,6 @@
 
 import { ipcBridge } from '@/common';
 import type { IDirOrFile } from '@/common/ipcBridge';
-import { ConfigStorage } from '@/common/storage';
 import FlexFullContainer from '@/renderer/components/FlexFullContainer';
 import useDebounce from '@/renderer/hooks/useDebounce';
 import { usePreviewContext } from '@/renderer/pages/conversation/preview';
@@ -17,12 +16,12 @@ import type { RefInputType } from '@arco-design/web-react/es/Input/interface';
 import { FileAddition, FileText, FolderOpen, Refresh, Search } from '@icon-park/react';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useWorkspaceDragImport } from './hooks/useWorkspaceDragImport';
 import { useWorkspaceEvents } from './hooks/useWorkspaceEvents';
 import { useWorkspaceFileOps } from './hooks/useWorkspaceFileOps';
 import { useWorkspaceModals } from './hooks/useWorkspaceModals';
 import { useWorkspacePaste } from './hooks/useWorkspacePaste';
 import { useWorkspaceTree } from './hooks/useWorkspaceTree';
-import { useWorkspaceDragImport } from './hooks/useWorkspaceDragImport';
 import type { WorkspaceProps } from './types';
 import { extractNodeData, extractNodeKey, findNodeByKey, getTargetFolderPath } from './utils/treeHelpers';
 
@@ -99,6 +98,7 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({ conversation_id, workspace, e
   useWorkspaceEvents({
     conversation_id,
     eventPrefix,
+    files: treeHook.files,
     refreshWorkspace: treeHook.refreshWorkspace,
     clearSelection: treeHook.clearSelection,
     setFiles: treeHook.setFiles,
@@ -380,6 +380,78 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({ conversation_id, workspace, e
         {/* Delete Modal */}
         <Modal visible={modalsHook.deleteModal.visible} title={t('conversation.workspace.contextMenu.deleteTitle')} onCancel={modalsHook.closeDeleteModal} onOk={fileOpsHook.handleDeleteConfirm} okText={t('common.confirm')} cancelText={t('common.cancel')} confirmLoading={modalsHook.deleteModal.loading} style={{ borderRadius: '12px' }} alignCenter getPopupContainer={() => document.body}>
           <div className='text-14px text-t-secondary'>{t('conversation.workspace.contextMenu.deleteConfirm')}</div>
+        </Modal>
+
+        {/* Duplicate File Confirm Modal */}
+        <Modal visible={pasteHook.duplicateConfirm.visible} title={null} onCancel={pasteHook.closeDuplicateConfirm} footer={null} style={{ borderRadius: '12px' }} className='duplicate-confirm-modal' alignCenter getPopupContainer={() => document.body}>
+          <div className='px-24px py-20px'>
+            {/* Title area */}
+            <div className='flex items-center gap-12px mb-20px'>
+              <div className='flex items-center justify-center w-48px h-48px rounded-full' style={{ backgroundColor: 'rgba(255, 153, 0, 0.15)' }}>
+                <FileText theme='outline' size='24' fill='#ff9900' />
+              </div>
+              <div>
+                <div className='text-16px font-semibold mb-4px'>{t('conversation.workspace.duplicateConfirm.title')}</div>
+                <div className='text-13px' style={{ color: 'var(--color-text-3)' }}>
+                  {pasteHook.duplicateConfirm.duplicateFiles.length === 1 ? t('conversation.workspace.duplicateConfirm.messageSingle', { file: pasteHook.duplicateConfirm.duplicateFiles[0] }) : t('conversation.workspace.duplicateConfirm.message')}
+                </div>
+              </div>
+            </div>
+
+            {/* File list area */}
+            {pasteHook.duplicateConfirm.duplicateFiles.length > 1 && (
+              <div className='mb-20px px-12px py-12px rounded-8px max-h-200px overflow-y-auto' style={{ backgroundColor: 'var(--color-fill-2)' }}>
+                {pasteHook.duplicateConfirm.duplicateFiles.map((fileName, index) => (
+                  <div key={index} className='flex items-center gap-8px py-4px'>
+                    <FileText theme='outline' size='14' fill='var(--color-text-3)' />
+                    <span className='text-13px break-all' style={{ color: 'var(--color-text-1)' }}>
+                      {fileName}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Button area */}
+            <div className='flex gap-12px justify-end'>
+              <button
+                className='px-16px py-8px rounded-6px text-14px font-medium transition-all'
+                style={{
+                  border: '1px solid var(--color-border-2)',
+                  backgroundColor: 'transparent',
+                  color: 'var(--color-text-1)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--color-fill-2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                }}
+                onClick={pasteHook.closeDuplicateConfirm}
+              >
+                {t('conversation.workspace.duplicateConfirm.skip')}
+              </button>
+              <button
+                className='px-16px py-8px rounded-6px text-14px font-medium transition-all'
+                style={{
+                  border: 'none',
+                  backgroundColor: '#ff9900',
+                  color: 'white',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#e68a00';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#ff9900';
+                }}
+                onClick={async () => {
+                  await pasteHook.handleDuplicateReplace();
+                }}
+              >
+                {t('conversation.workspace.duplicateConfirm.replace')}
+              </button>
+            </div>
+          </div>
         </Modal>
 
         {/* Toolbar */}

@@ -4,25 +4,31 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { PreviewContentType } from '@/common/types/preview';
+import type { FileOrFolderItem } from '@/renderer/types/files';
 import EventEmitter from 'eventemitter3';
 import type { DependencyList } from 'react';
 import { useEffect } from 'react';
-import type { FileOrFolderItem } from '@/renderer/types/files';
-import type { PreviewContentType } from '@/common/types/preview';
 
 interface EventTypes {
   'gemini.selected.file': [Array<string | FileOrFolderItem>];
   'gemini.selected.file.append': [Array<string | FileOrFolderItem>];
   'gemini.selected.file.clear': void;
   'gemini.workspace.refresh': void;
+  'gemini.uploadFile.get': [(files: string[]) => void];
+  'gemini.workspace.files.get': [(files: string[]) => void];
   'acp.selected.file': [Array<string | FileOrFolderItem>];
   'acp.selected.file.append': [Array<string | FileOrFolderItem>];
   'acp.selected.file.clear': void;
   'acp.workspace.refresh': void;
+  'acp.uploadFile.get': [(files: string[]) => void];
+  'acp.workspace.files.get': [(files: string[]) => void];
   'codex.selected.file': [Array<string | FileOrFolderItem>];
   'codex.selected.file.append': [Array<string | FileOrFolderItem>];
   'codex.selected.file.clear': void;
   'codex.workspace.refresh': void;
+  'codex.uploadFile.get': [(files: string[]) => void];
+  'codex.workspace.files.get': [(files: string[]) => void];
   'chat.history.refresh': void;
   // 预览面板事件 / Preview panel events
   'preview.open': [{ content: string; contentType: PreviewContentType; metadata?: { title?: string; fileName?: string } }];

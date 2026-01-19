@@ -19,7 +19,7 @@ import { iconColors } from '@/renderer/theme/colors';
 import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { mergeFileSelectionItems } from '@/renderer/utils/fileSelection';
 import { getModelContextLimit } from '@/renderer/utils/modelContextLimits';
-import { Button, Tag } from '@arco-design/web-react';
+import { Button, Message, Tag } from '@arco-design/web-react';
 import { Plus } from '@icon-park/react';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -244,6 +244,7 @@ const GeminiSendBox: React.FC<{
     uploadFile,
     setAtPath,
     setUploadFile,
+    eventPrefix: 'gemini',
   });
 
   const onSendHandler = async (message: string) => {
@@ -291,6 +292,12 @@ const GeminiSendBox: React.FC<{
     }
   });
 
+  // uploadFile 목록을 다른 컴포넌트에서 조회할 수 있도록 응답
+  // Allow other components to query uploadFile list for duplicate checking
+  useAddEventListener('gemini.uploadFile.get', (callback: (files: string[]) => void) => {
+    callback(uploadFile);
+  });
+
   return (
     <div className='max-w-800px w-full mx-auto flex flex-col mt-auto mb-16px'>
       <ThoughtDisplay thought={thought} />
@@ -324,7 +331,56 @@ const GeminiSendBox: React.FC<{
             onClick={() => {
               void ipcBridge.dialog.showOpen.invoke({ properties: ['openFile', 'multiSelections'] }).then((files) => {
                 if (files && files.length > 0) {
-                  setUploadFile([...uploadFile, ...files]);
+                  // 파일명 추출 헬퍼
+                  const getFileName = (path: string) => path.split(/[\\/]/).pop() || path;
+
+                  // workspace 파일 목록도 가져와서 체크
+                  emitter.emit('gemini.workspace.files.get', (workspaceFileNames: string[]) => {
+                    // 각각의 중복 원인을 구분
+                    const atPathFileNames = atPath.map((item) => getFileName(typeof item === 'string' ? item : item.path));
+                    const uploadFileNames = new Set(uploadFile.map(getFileName));
+                    const attachedFileNames = new Set([...uploadFileNames, ...atPathFileNames]);
+                    const workspaceFileNamesSet = new Set(workspaceFileNames);
+
+                    const newFiles: string[] = [];
+                    const workspaceDuplicates: string[] = [];
+                    const attachedDuplicates: string[] = [];
+
+                    for (const f of files) {
+                      const fileName = getFileName(f);
+                      if (attachedFileNames.has(fileName)) {
+                        attachedDuplicates.push(f);
+                      } else if (workspaceFileNamesSet.has(fileName)) {
+                        workspaceDuplicates.push(f);
+                      } else {
+                        newFiles.push(f);
+                      }
+                    }
+
+                    // 중복 메시지 표시
+                    if (workspaceDuplicates.length > 0 && attachedDuplicates.length === 0 && newFiles.length === 0) {
+                      // workspace에만 중복
+                      Message.warning(t('messages.workspaceAllFilesSkipped'));
+                    } else if (attachedDuplicates.length > 0 && workspaceDuplicates.length === 0 && newFiles.length === 0) {
+                      // 첨부에만 중복
+                      Message.warning(t('messages.allFilesDuplicate'));
+                    } else if ((workspaceDuplicates.length > 0 || attachedDuplicates.length > 0) && newFiles.length === 0) {
+                      // 둘 다 섞여서 중복
+                      Message.warning(t('messages.allFilesDuplicate'));
+                    } else if (workspaceDuplicates.length > 0 && newFiles.length > 0) {
+                      // 일부가 workspace에 중복
+                      const duplicateNames = workspaceDuplicates.map(getFileName).join(', ');
+                      Message.warning(t('messages.workspaceFilesSkipped', { files: duplicateNames }));
+                    } else if (attachedDuplicates.length > 0 && newFiles.length > 0) {
+                      // 일부가 첨부에 중복
+                      const duplicateNames = attachedDuplicates.map(getFileName).join(', ');
+                      Message.warning(t('messages.duplicateFilesIgnored', { files: duplicateNames }));
+                    }
+
+                    if (newFiles.length > 0) {
+                      setUploadFile([...uploadFile, ...newFiles]);
+                    }
+                  });
                 }
               });
             }}

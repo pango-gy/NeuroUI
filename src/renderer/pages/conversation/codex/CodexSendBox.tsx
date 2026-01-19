@@ -2,23 +2,23 @@ import { ipcBridge } from '@/common';
 import type { TMessage } from '@/common/chatLib';
 import { transformMessage } from '@/common/chatLib';
 import { uuid } from '@/common/utils';
-import SendBox from '@/renderer/components/sendbox';
-import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/useSendBoxDraft';
-import { useAddOrUpdateMessage } from '@/renderer/messages/hooks';
-import { allSupportedExts, type FileMetadata } from '@/renderer/services/FileService';
-import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
-import { mergeFileSelectionItems } from '@/renderer/utils/fileSelection';
-import { Button, Tag } from '@arco-design/web-react';
-import { Plus } from '@icon-park/react';
-import { iconColors } from '@/renderer/theme/colors';
-import React, { useCallback, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import ShimmerText from '@renderer/components/ShimmerText';
-import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/ThoughtDisplay';
 import FilePreview from '@/renderer/components/FilePreview';
 import HorizontalFileList from '@/renderer/components/HorizontalFileList';
-import { usePreviewContext } from '@/renderer/pages/conversation/preview';
+import SendBox from '@/renderer/components/sendbox';
+import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/ThoughtDisplay';
 import { useLatestRef } from '@/renderer/hooks/useLatestRef';
+import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/useSendBoxDraft';
+import { useAddOrUpdateMessage } from '@/renderer/messages/hooks';
+import { usePreviewContext } from '@/renderer/pages/conversation/preview';
+import { allSupportedExts, type FileMetadata } from '@/renderer/services/FileService';
+import { iconColors } from '@/renderer/theme/colors';
+import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
+import { mergeFileSelectionItems } from '@/renderer/utils/fileSelection';
+import { Button, Message, Tag } from '@arco-design/web-react';
+import { Plus } from '@icon-park/react';
+import ShimmerText from '@renderer/components/ShimmerText';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface CodexDraftData {
   _type: 'codex';
@@ -135,14 +135,59 @@ const CodexSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id }
     });
   }, [conversation_id, addOrUpdateMessage]);
 
-  // 处理粘贴的文件 - Codex专用逻辑
+  // 处理粘贴的文件 - Codex专用逻辑 (중복 체크 포함 - uploadFile + atPath + workspace 모두 검사, 파일명 기준)
   const handleFilesAdded = useCallback(
     (pastedFiles: FileMetadata[]) => {
+      // 파일명 추출 헬퍼
+      const getFileName = (path: string) => path.split(/[\\/]/).pop() || path;
+
       // 将粘贴的文件添加到uploadFile中
       const filePaths = pastedFiles.map((file) => file.path);
-      setUploadFile([...uploadFile, ...filePaths]);
+
+      // workspace 파일 목록도 가져와서 체크
+      emitter.emit('codex.workspace.files.get', (workspaceFileNames: string[]) => {
+        // 각각의 중복 원인을 구분
+        const atPathFileNames = atPath.map((item) => getFileName(typeof item === 'string' ? item : item.path));
+        const uploadFileNames = new Set(uploadFile.map(getFileName));
+        const attachedFileNames = new Set([...uploadFileNames, ...atPathFileNames]);
+        const workspaceFileNamesSet = new Set(workspaceFileNames);
+
+        const newPaths: string[] = [];
+        const workspaceDuplicates: string[] = [];
+        const attachedDuplicates: string[] = [];
+
+        for (const f of filePaths) {
+          const fileName = getFileName(f);
+          if (attachedFileNames.has(fileName)) {
+            attachedDuplicates.push(f);
+          } else if (workspaceFileNamesSet.has(fileName)) {
+            workspaceDuplicates.push(f);
+          } else {
+            newPaths.push(f);
+          }
+        }
+
+        // 중복 메시지 표시
+        if (workspaceDuplicates.length > 0 && attachedDuplicates.length === 0 && newPaths.length === 0) {
+          Message.warning(t('messages.workspaceAllFilesSkipped'));
+        } else if (attachedDuplicates.length > 0 && workspaceDuplicates.length === 0 && newPaths.length === 0) {
+          Message.warning(t('messages.allFilesDuplicate'));
+        } else if ((workspaceDuplicates.length > 0 || attachedDuplicates.length > 0) && newPaths.length === 0) {
+          Message.warning(t('messages.allFilesDuplicate'));
+        } else if (workspaceDuplicates.length > 0 && newPaths.length > 0) {
+          const duplicateNames = workspaceDuplicates.map(getFileName).join(', ');
+          Message.warning(t('messages.workspaceFilesSkipped', { files: duplicateNames }));
+        } else if (attachedDuplicates.length > 0 && newPaths.length > 0) {
+          const duplicateNames = attachedDuplicates.map(getFileName).join(', ');
+          Message.warning(t('messages.duplicateFilesIgnored', { files: duplicateNames }));
+        }
+
+        if (newPaths.length > 0) {
+          setUploadFile([...uploadFile, ...newPaths]);
+        }
+      });
     },
-    [uploadFile, setUploadFile]
+    [uploadFile, setUploadFile, t, atPath]
   );
 
   // 监听从工作空间选择的文件/文件夹（接收对象或路径数组）
@@ -161,6 +206,12 @@ const CodexSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id }
         setAtPath(merged as Array<string | FileOrFolderItem>);
       }
     }, 10);
+  });
+
+  // uploadFile 목록을 다른 컴포넌트에서 조회할 수 있도록 응답
+  // Allow other components to query uploadFile list for duplicate checking
+  useAddEventListener('codex.uploadFile.get', (callback: (files: string[]) => void) => {
+    callback(uploadFile);
   });
 
   const onSendHandler = async (message: string) => {
@@ -328,7 +379,51 @@ const CodexSendBox: React.FC<{ conversation_id: string }> = ({ conversation_id }
             onClick={() => {
               void ipcBridge.dialog.showOpen.invoke({ properties: ['openFile', 'multiSelections'] }).then((files) => {
                 if (files && files.length > 0) {
-                  setUploadFile([...uploadFile, ...files]);
+                  // 파일명 추출 헬퍼
+                  const getFileName = (path: string) => path.split(/[\\/]/).pop() || path;
+
+                  // workspace 파일 목록도 가져와서 체크
+                  emitter.emit('codex.workspace.files.get', (workspaceFileNames: string[]) => {
+                    // 각각의 중복 원인을 구분
+                    const atPathFileNames = atPath.map((item) => getFileName(typeof item === 'string' ? item : item.path));
+                    const uploadFileNames = new Set(uploadFile.map(getFileName));
+                    const attachedFileNames = new Set([...uploadFileNames, ...atPathFileNames]);
+                    const workspaceFileNamesSet = new Set(workspaceFileNames);
+
+                    const newFiles: string[] = [];
+                    const workspaceDuplicates: string[] = [];
+                    const attachedDuplicates: string[] = [];
+
+                    for (const f of files) {
+                      const fileName = getFileName(f);
+                      if (attachedFileNames.has(fileName)) {
+                        attachedDuplicates.push(f);
+                      } else if (workspaceFileNamesSet.has(fileName)) {
+                        workspaceDuplicates.push(f);
+                      } else {
+                        newFiles.push(f);
+                      }
+                    }
+
+                    // 중복 메시지 표시
+                    if (workspaceDuplicates.length > 0 && attachedDuplicates.length === 0 && newFiles.length === 0) {
+                      Message.warning(t('messages.workspaceAllFilesSkipped'));
+                    } else if (attachedDuplicates.length > 0 && workspaceDuplicates.length === 0 && newFiles.length === 0) {
+                      Message.warning(t('messages.allFilesDuplicate'));
+                    } else if ((workspaceDuplicates.length > 0 || attachedDuplicates.length > 0) && newFiles.length === 0) {
+                      Message.warning(t('messages.allFilesDuplicate'));
+                    } else if (workspaceDuplicates.length > 0 && newFiles.length > 0) {
+                      const duplicateNames = workspaceDuplicates.map(getFileName).join(', ');
+                      Message.warning(t('messages.workspaceFilesSkipped', { files: duplicateNames }));
+                    } else if (attachedDuplicates.length > 0 && newFiles.length > 0) {
+                      const duplicateNames = attachedDuplicates.map(getFileName).join(', ');
+                      Message.warning(t('messages.duplicateFilesIgnored', { files: duplicateNames }));
+                    }
+
+                    if (newFiles.length > 0) {
+                      setUploadFile([...uploadFile, ...newFiles]);
+                    }
+                  });
                 }
               });
             }}

@@ -164,10 +164,17 @@ class FileServiceClass {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      // In Electron environment, dragged files have additional path property
-      const electronFile = file as File & { path?: string };
 
-      let filePath = electronFile.path || '';
+      // Electron 32+ 에서는 File.path가 제거됨, webUtils.getPathForFile 사용
+      // In Electron 32+, File.path is removed, use webUtils.getPathForFile instead
+      let filePath = '';
+      if (window.electronAPI?.getPathForFile) {
+        try {
+          filePath = window.electronAPI.getPathForFile(file);
+        } catch (err) {
+          console.warn('[processDroppedFiles] getPathForFile failed:', err);
+        }
+      }
 
       // If no valid path (some dragged files may not have paths), create temporary file
       if (!filePath) {

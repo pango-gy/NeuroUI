@@ -9,13 +9,13 @@ import type { IDirOrFile } from '@/common/ipcBridge';
 import { ConfigStorage } from '@/common/storage';
 import { usePasteService } from '@/renderer/hooks/usePasteService';
 import { useCallback, useState } from 'react';
-import type { MessageApi, PasteConfirmState, SelectedNodeRef } from '../types';
+import type { DuplicateConfirmState, MessageApi, PasteConfirmState, SelectedNodeRef } from '../types';
 import { getTargetFolderPath } from '../utils/treeHelpers';
 
 interface UseWorkspacePasteOptions {
   workspace: string;
   messageApi: MessageApi;
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, string>) => string;
 
   // Dependencies from useWorkspaceTree
   files: IDirOrFile[];
@@ -40,6 +40,56 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
   // Track paste target folder (for visual feedback)
   const [pasteTargetFolder, setPasteTargetFolder] = useState<string | null>(null);
 
+  // 중복 파일 확인 모달 상태
+  const [duplicateConfirm, setDuplicateConfirm] = useState<DuplicateConfirmState>({
+    visible: false,
+    duplicateFiles: [],
+    originalFilePaths: [],
+    targetWorkspace: '',
+  });
+
+  // 중복 파일 확인 모달 닫기
+  const closeDuplicateConfirm = useCallback(() => {
+    setDuplicateConfirm({
+      visible: false,
+      duplicateFiles: [],
+      originalFilePaths: [],
+      targetWorkspace: '',
+    });
+  }, []);
+
+  // 중복 파일 교체 핸들러
+  const handleDuplicateReplace = useCallback(async () => {
+    try {
+      const { originalFilePaths, targetWorkspace } = duplicateConfirm;
+
+      // overwrite: true로 다시 호출
+      const res = await ipcBridge.fs.copyFilesToWorkspace.invoke({
+        filePaths: originalFilePaths,
+        workspace: targetWorkspace,
+        overwrite: true,
+      });
+
+      const copiedFiles = res.data?.copiedFiles ?? [];
+      const failedFiles = res.data?.failedFiles ?? [];
+
+      if (copiedFiles.length > 0) {
+        messageApi.success(t('messages.responseSentSuccessfully') || 'Replaced');
+        setTimeout(() => refreshWorkspace(), 300);
+      }
+
+      if (!res.success || failedFiles.length > 0) {
+        const fallback = failedFiles.length > 0 ? 'Some files failed to copy' : res.msg;
+        messageApi.warning(fallback || t('messages.unknownError') || 'Replace failed');
+      }
+    } catch (error) {
+      messageApi.error(t('messages.unknownError') || 'Replace failed');
+    } finally {
+      closeDuplicateConfirm();
+      setPasteTargetFolder(null);
+    }
+  }, [duplicateConfirm, closeDuplicateConfirm, messageApi, t, refreshWorkspace]);
+
   /**
    * 添加文件（从文件系统选择器）
    * Add files (from file system picker)
@@ -55,6 +105,7 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
           return ipcBridge.fs.copyFilesToWorkspace.invoke({ filePaths: selectedFiles, workspace }).then((result) => {
             const copiedFiles = result.data?.copiedFiles ?? [];
             const failedFiles = result.data?.failedFiles ?? [];
+            const skippedFiles = result.data?.skippedFiles ?? [];
 
             if (copiedFiles.length > 0) {
               setTimeout(() => {
@@ -62,8 +113,23 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
               }, 300);
             }
 
+            // 중복 파일이 있으면 확인 모달 표시
+            if (skippedFiles.length > 0) {
+              // 중복된 파일의 원본 경로 찾기
+              const duplicateOriginalPaths = selectedFiles.filter((filePath) => {
+                const fileName = filePath.split(/[\\/]/).pop() || '';
+                return skippedFiles.includes(fileName);
+              });
+
+              setDuplicateConfirm({
+                visible: true,
+                duplicateFiles: skippedFiles,
+                originalFilePaths: duplicateOriginalPaths,
+                targetWorkspace: workspace,
+              });
+            }
+
             if (!result.success || failedFiles.length > 0) {
-              // 部分或全部失败时给出显式提示 / Surface warning when any copy operation fails
               const fallback = failedFiles.length > 0 ? 'Some files failed to copy' : result.msg;
               messageApi.warning(fallback || t('messages.unknownError') || 'Copy failed');
             }
@@ -101,14 +167,29 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
           const res = await ipcBridge.fs.copyFilesToWorkspace.invoke({ filePaths, workspace: targetFolderPath });
           const copiedFiles = res.data?.copiedFiles ?? [];
           const failedFiles = res.data?.failedFiles ?? [];
+          const skippedFiles = res.data?.skippedFiles ?? [];
 
           if (copiedFiles.length > 0) {
             messageApi.success(t('messages.responseSentSuccessfully') || 'Pasted');
             setTimeout(() => refreshWorkspace(), 300);
           }
 
+          // 중복 파일이 있으면 확인 모달 표시
+          if (skippedFiles.length > 0) {
+            const duplicateOriginalPaths = filePaths.filter((filePath) => {
+              const fileName = filePath.split(/[\\/]/).pop() || '';
+              return skippedFiles.includes(fileName);
+            });
+
+            setDuplicateConfirm({
+              visible: true,
+              duplicateFiles: skippedFiles,
+              originalFilePaths: duplicateOriginalPaths,
+              targetWorkspace: targetFolderPath,
+            });
+          }
+
           if (!res.success || failedFiles.length > 0) {
-            // 如果有文件粘贴失败则通知用户 / Notify user when any paste fails
             const fallback = failedFiles.length > 0 ? 'Some files failed to copy' : res.msg;
             messageApi.warning(fallback || t('messages.unknownError') || 'Paste failed');
           }
@@ -117,7 +198,9 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
         } finally {
           // 操作完成后重置粘贴目标文件夹（成功或失败都重置）
           // Reset paste target folder after operation completes (success or failure)
-          setPasteTargetFolder(null);
+          if (!(await ConfigStorage.get('workspace.pasteConfirm'))) {
+            setPasteTargetFolder(null);
+          }
         }
         return;
       }
@@ -155,10 +238,26 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
       const res = await ipcBridge.fs.copyFilesToWorkspace.invoke({ filePaths, workspace: targetFolderPath });
       const copiedFiles = res.data?.copiedFiles ?? [];
       const failedFiles = res.data?.failedFiles ?? [];
+      const skippedFiles = res.data?.skippedFiles ?? [];
 
       if (copiedFiles.length > 0) {
         messageApi.success(t('messages.responseSentSuccessfully') || 'Pasted');
         setTimeout(() => refreshWorkspace(), 300);
+      }
+
+      // 중복 파일이 있으면 확인 모달 표시
+      if (skippedFiles.length > 0) {
+        const duplicateOriginalPaths = filePaths.filter((filePath) => {
+          const fileName = filePath.split(/[\\/]/).pop() || '';
+          return skippedFiles.includes(fileName);
+        });
+
+        setDuplicateConfirm({
+          visible: true,
+          duplicateFiles: skippedFiles,
+          originalFilePaths: duplicateOriginalPaths,
+          targetWorkspace: targetFolderPath,
+        });
       }
 
       if (!res.success || failedFiles.length > 0) {
@@ -193,5 +292,9 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
     handleFilesToAdd,
     handlePasteConfirm,
     onFocusPaste: onFocus,
+    // 중복 파일 확인 관련
+    duplicateConfirm,
+    closeDuplicateConfirm,
+    handleDuplicateReplace,
   };
 }

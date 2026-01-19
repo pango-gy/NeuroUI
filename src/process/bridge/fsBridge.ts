@@ -6,9 +6,9 @@
 
 import { AIONUI_TIMESTAMP_SEPARATOR } from '@/common/constants';
 import fs from 'fs/promises';
-import path from 'path';
-import https from 'node:https';
 import http from 'node:http';
+import https from 'node:https';
+import path from 'path';
 import { ipcBridge } from '../../common';
 import { getSystemDir } from '../initStorage';
 import { readDirectoryRecursive } from '../utils';
@@ -265,10 +265,11 @@ export function initFsBridge(): void {
   });
 
   // 复制文件到工作空间
-  ipcBridge.fs.copyFilesToWorkspace.provider(async ({ filePaths, workspace }) => {
+  ipcBridge.fs.copyFilesToWorkspace.provider(async ({ filePaths, workspace, overwrite }) => {
     try {
       const copiedFiles: string[] = [];
       const failedFiles: Array<{ path: string; error: string }> = [];
+      const skippedFiles: string[] = []; // 중복으로 스킵된 파일들
 
       // 确保工作空间目录存在 / Ensure workspace directory exists
       await fs.mkdir(workspace, { recursive: true });
@@ -284,18 +285,21 @@ export function initFsBridge(): void {
             .then(() => true)
             .catch(() => false);
 
-          let finalTargetPath = targetPath;
           if (exists) {
-            // 如果文件已存在，添加时间戳后缀 / Append timestamp when target file already exists
-            const timestamp = Date.now();
-            const ext = path.extname(fileName);
-            const name = path.basename(fileName, ext);
-            const newFileName = `${name}${AIONUI_TIMESTAMP_SEPARATOR}${timestamp}${ext}`;
-            finalTargetPath = path.join(workspace, newFileName);
+            if (overwrite) {
+              // 덮어쓰기 모드: 기존 파일 삭제 후 복사
+              await fs.unlink(targetPath);
+              await fs.copyFile(filePath, targetPath);
+              copiedFiles.push(targetPath);
+            } else {
+              // 스킵 모드: 중복 파일은 복사하지 않음
+              skippedFiles.push(fileName);
+            }
+            continue;
           }
 
-          await fs.copyFile(filePath, finalTargetPath);
-          copiedFiles.push(finalTargetPath);
+          await fs.copyFile(filePath, targetPath);
+          copiedFiles.push(targetPath);
         } catch (error) {
           // 记录失败的文件路径与错误信息，前端可以用来提示用户 / Record failed file info so UI can warn user
           const message = error instanceof Error ? error.message : String(error);
@@ -310,7 +314,7 @@ export function initFsBridge(): void {
 
       return {
         success,
-        data: { copiedFiles, failedFiles },
+        data: { copiedFiles, failedFiles, skippedFiles },
         msg,
       };
     } catch (error) {

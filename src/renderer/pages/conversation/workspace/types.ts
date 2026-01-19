@@ -5,8 +5,8 @@
  */
 
 import type { IDirOrFile } from '@/common/ipcBridge';
-import type { NodeInstance } from '@arco-design/web-react/es/Tree/interface';
 import type { Message } from '@arco-design/web-react';
+import type { NodeInstance } from '@arco-design/web-react/es/Tree/interface';
 
 export type MessageApi = ReturnType<typeof Message.useMessage>[0];
 
@@ -62,6 +62,17 @@ export interface PasteConfirmState {
   filesToPaste: Array<{ path: string; name: string }>;
   doNotAsk: boolean;
   targetFolder: string | null;
+}
+
+/**
+ * 중복 파일 교체 확인 모달 상태
+ * Duplicate file replace confirmation modal state
+ */
+export interface DuplicateConfirmState {
+  visible: boolean;
+  duplicateFiles: string[]; // 중복된 파일명 목록
+  originalFilePaths: string[]; // 원본 파일 경로 목록 (재시도용)
+  targetWorkspace: string; // 대상 작업 공간 경로
 }
 
 /**

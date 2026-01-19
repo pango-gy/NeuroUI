@@ -267,6 +267,13 @@
         "addedToChat": "채팅에 추가됨",
         "openFailed": "열기 실패",
         "revealFailed": "포함 폴더 열기 실패"
+      },
+      "duplicateConfirm": {
+        "title": "이미 추가된 파일",
+        "message": "다음 파일이 이미 작업 공간에 있습니다. 교체하시겠습니까?",
+        "messageSingle": "'{{file}}'이(가) 이미 작업 공간에 있습니다. 교체하시겠습니까?",
+        "replace": "교체",
+        "skip": "건너뛰기"
       }
     },
     "chat": {
@@ -463,6 +470,10 @@
     "copiedToClipboard": "클립보드에 복사됨",
     "downloadSuccess": "다운로드 성공",
     "downloadFailed": "다운로드 실패",
+    "duplicateFilesIgnored": "이미 첨부된 파일은 무시되었습니다: {{files}}",
+    "allFilesDuplicate": "선택한 파일이 이미 모두 첨부되어 있습니다",
+    "workspaceFilesSkipped": "이미 추가된 파일입니다: {{files}}",
+    "workspaceAllFilesSkipped": "이미 추가된 파일입니다",
     "imageLoadFailed": "이미지 로드 실패",
     "scrollToBottom": "맨 아래로 스크롤",
     "unknownMessageType": "알 수 없는 메시지 유형: {{type}}",
