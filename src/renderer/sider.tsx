@@ -1,6 +1,6 @@
-import { Dropdown, Menu, Tooltip } from '@arco-design/web-react';
-import { ArrowCircleLeft, Down, Logout, Plus, SettingTwo } from '@icon-park/react';
-import React, { useEffect, useRef } from 'react';
+import { Dropdown, Input, Menu, Tooltip } from '@arco-design/web-react';
+import { ArrowCircleLeft, Down, Logout, Plus, Search, SettingTwo } from '@icon-park/react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
@@ -22,6 +22,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const { logout, user, workspaces, currentWorkspace, switchWorkspace } = useAuth();
   const isSettings = pathname.startsWith('/settings');
   const lastNonSettingsPathRef = useRef('/guid');
+  const [searchValue, setSearchValue] = useState('');
 
   useEffect(() => {
     if (!pathname.startsWith('/settings')) {
@@ -51,36 +52,54 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
     });
   };
 
+  const filteredWorkspaces = workspaces.filter((ws) => ws.name.toLowerCase().includes(searchValue.toLowerCase()));
+
   // 브랜드 선택 드롭다운 메뉴
   const brandMenu = (
-    <Menu
-      onClickMenuItem={(key) => {
-        if (key === 'add_workspace') {
-          window.open('https://neuro.pango-gy.com', '_blank');
-        } else {
-          switchWorkspace(key);
-        }
-      }}
-    >
-      {workspaces.map((ws) => (
-        <Menu.Item key={ws.id} className={ws.id === currentWorkspace?.id ? 'arco-menu-selected' : ''}>
-          {ws.name}
-        </Menu.Item>
-      ))}
-      <Menu.Item key='add_workspace'>
-        <div className='flex items-center gap-8px'>
-          <Plus theme='outline' size='16' fill={iconColors.primary} />
-          <span>{t('workspace.add', { defaultValue: '워크스페이스 추가' })}</span>
-        </div>
-      </Menu.Item>
-    </Menu>
+    <div className='bg-[var(--color-bg-popup)] shadow-lg rounded-lg border border-[var(--color-border-1)] overflow-hidden w-64 flex flex-col'>
+      <div className='p-2 border-b border-[var(--color-border-2)] flex-shrink-0'>
+        <Input prefix={<Search theme='outline' size='14' fill='var(--color-text-2)' />} placeholder={t('common.search', { defaultValue: '검색' })} value={searchValue} onChange={setSearchValue} allowClear className='w-full' />
+      </div>
+      <div className='overflow-y-auto max-h-[300px]'>
+        <Menu
+          style={{ border: 'none', boxShadow: 'none' }}
+          onClickMenuItem={(key) => {
+            if (key === 'add_workspace') {
+              window.open('https://neuro.pango-gy.com', '_blank');
+            } else {
+              switchWorkspace(key);
+            }
+          }}
+        >
+          {filteredWorkspaces.map((ws) => (
+            <Menu.Item key={ws.id} className={ws.id === currentWorkspace?.id ? 'arco-menu-selected' : ''}>
+              {ws.name}
+            </Menu.Item>
+          ))}
+          {filteredWorkspaces.length === 0 && <div className='px-12px py-8px text-t-tertiary text-12px text-center'>{t('common.noResult', { defaultValue: '검색 결과 없음' })}</div>}
+          <Menu.Item key='add_workspace'>
+            <div className='flex items-center gap-8px'>
+              <Plus theme='outline' size='16' fill={iconColors.primary} />
+              <span>{t('workspace.add', { defaultValue: '워크스페이스 추가' })}</span>
+            </div>
+          </Menu.Item>
+        </Menu>
+      </div>
+    </div>
   );
 
   return (
     <div className='size-full flex flex-col'>
       {/* 브랜드 선택 드롭다운 */}
       {!isSettings && workspaces.length > 0 && (
-        <Dropdown droplist={brandMenu} trigger='click' position='bl'>
+        <Dropdown
+          droplist={brandMenu}
+          trigger='click'
+          position='bl'
+          onVisibleChange={(visible) => {
+            if (!visible) setSearchValue('');
+          }}
+        >
           <div className='flex items-center justify-between px-12px py-12px hover:bg-[var(--color-primary-light-1)] rd-8px mx-4px mb-12px cursor-pointer bg-[var(--color-fill-2)] border border-solid border-[var(--color-border-2)]'>
             <div className='flex flex-col min-w-0 flex-1'>
               <span className='text-11px text-t-secondary collapsed-hidden'>{t('brand.current', { defaultValue: '현재 브랜드' })}</span>

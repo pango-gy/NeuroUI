@@ -5,7 +5,8 @@
  */
 
 import { auth, db } from '@/renderer/config/firebase';
-import { DatePicker, Empty, Spin, Statistic, Table } from '@arco-design/web-react';
+import { useAuth } from '@/renderer/context/AuthContext';
+import { DatePicker, Empty, Select, Spin, Statistic, Table } from '@arco-design/web-react';
 import { Timestamp, collection, getDocs, orderBy, query, where } from 'firebase/firestore';
 import React, { useEffect, useMemo, useState } from 'react';
 import SettingsPageWrapper from './components/SettingsPageWrapper';
@@ -17,6 +18,7 @@ import { Line } from 'react-chartjs-2';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 const { RangePicker } = DatePicker;
+const { Option } = Select;
 
 // Pricing with 20% markup (per 1M tokens)
 const PRICING = {
@@ -36,6 +38,7 @@ interface UsageLog {
   total_tokens: number;
   cost?: number;
   timestamp: Timestamp;
+  workspaceId?: string;
 }
 
 interface DailyUsage {
@@ -55,13 +58,24 @@ const calculateCost = (input: number, output: number, thoughts: number, cached: 
 const formatCurrency = (value: number): string => `$${value.toFixed(4)}`;
 const formatNumber = (value: number): string => value.toLocaleString();
 
+// Helper to get YYYY-MM-DD in local time
+const getLocalDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const UsageSettings: React.FC = () => {
+  const { workspaces } = useAuth();
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<UsageLog[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>('all');
   const [dateRange, setDateRange] = useState<[Date, Date]>(() => {
     const end = new Date();
     const start = new Date();
     start.setDate(start.getDate() - 30);
+    start.setHours(0, 0, 0, 0); // Start from beginning of the day
     return [start, end];
   });
 
@@ -80,11 +94,23 @@ const UsageSettings: React.FC = () => {
 
         const q = query(logsRef, where('userId', '==', auth.currentUser.uid), where('timestamp', '>=', startTimestamp), where('timestamp', '<=', endTimestamp), orderBy('timestamp', 'desc'));
 
+        if (selectedWorkspaceId !== 'all') {
+          // Client-side filtering because Firestore requires composite index for multiple fields
+          // and we want to avoid creating too many indexes if possible.
+          // However, if the volume is huge, we should use server-side filter.
+          // For now, let's fetch by user + date and filter by workspace in memory
+          // since 'workspaceId' might be missing in old logs.
+        }
+
         const snapshot = await getDocs(q);
 
         const fetchedLogs: UsageLog[] = [];
         snapshot.forEach((doc) => {
-          fetchedLogs.push({ id: doc.id, ...doc.data() } as UsageLog);
+          const data = doc.data() as Omit<UsageLog, 'id'>;
+          // Filter by workspace if selected
+          if (selectedWorkspaceId === 'all' || data.workspaceId === selectedWorkspaceId) {
+            fetchedLogs.push({ id: doc.id, ...data });
+          }
         });
         setLogs(fetchedLogs);
       } catch (error) {
@@ -95,7 +121,7 @@ const UsageSettings: React.FC = () => {
     };
 
     void fetchLogs();
-  }, [dateRange]);
+  }, [dateRange, selectedWorkspaceId]);
 
   // Aggregate totals
   const totals = useMemo(() => {
@@ -118,12 +144,14 @@ const UsageSettings: React.FC = () => {
     return { inputTokens, outputTokens, thoughtsTokens, cachedTokens, totalTokens, totalCost };
   }, [logs]);
 
-  // Aggregate by day for chart and table
+  // Aggregate by day for chart and table (filling missing dates)
   const dailyUsage = useMemo(() => {
     const dailyMap = new Map<string, DailyUsage>();
 
+    // 1. Populate map with actual data
     logs.forEach((log) => {
-      const date = log.timestamp.toDate().toISOString().split('T')[0];
+      // Use local time for grouping
+      const date = getLocalDateString(log.timestamp.toDate());
       const existing = dailyMap.get(date) || {
         date,
         input_tokens: 0,
@@ -144,8 +172,34 @@ const UsageSettings: React.FC = () => {
       dailyMap.set(date, existing);
     });
 
-    return Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
-  }, [logs]);
+    // 2. Fill in missing dates from range
+    const result: DailyUsage[] = [];
+    const currentDate = new Date(dateRange[0]);
+    const endDate = new Date(dateRange[1]);
+
+    // Normalize to YYYY-MM-DD string for comparison
+    const endStr = getLocalDateString(endDate);
+
+    while (getLocalDateString(currentDate) <= endStr) {
+      const dateStr = getLocalDateString(currentDate);
+      if (dailyMap.has(dateStr)) {
+        result.push(dailyMap.get(dateStr)!);
+      } else {
+        result.push({
+          date: dateStr,
+          input_tokens: 0,
+          output_tokens: 0,
+          thoughts_tokens: 0,
+          cached_tokens: 0,
+          total_tokens: 0,
+          cost: 0,
+        });
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return result;
+  }, [logs, dateRange]);
 
   // Chart.js data
   const chartData = useMemo(() => {
@@ -203,7 +257,9 @@ const UsageSettings: React.FC = () => {
   ];
 
   // Reverse for table (newest first)
-  const tableData = useMemo(() => [...dailyUsage].reverse(), [dailyUsage]);
+  const tableData = useMemo(() => {
+    return [...dailyUsage].reverse();
+  }, [dailyUsage]);
 
   return (
     <SettingsPageWrapper contentClassName='max-w-1200px'>
@@ -211,15 +267,29 @@ const UsageSettings: React.FC = () => {
         {/* Header */}
         <div className='flex justify-between items-center'>
           <h2 className='text-20px font-600 m-0'>사용량</h2>
-          <RangePicker
-            value={dateRange}
-            onChange={(_dateStrings, dates) => {
-              if (dates && dates[0] && dates[1]) {
-                setDateRange([dates[0].toDate(), dates[1].toDate()]);
-              }
-            }}
-            style={{ width: 280 }}
-          />
+          <div className='flex items-center gap-12px'>
+            <Select placeholder='워크스페이스 선택' style={{ width: 200 }} value={selectedWorkspaceId} onChange={setSelectedWorkspaceId}>
+              <Option value='all'>모든 워크스페이스</Option>
+              {workspaces.map((ws) => (
+                <Option key={ws.id} value={ws.id}>
+                  {ws.name}
+                </Option>
+              ))}
+            </Select>
+            <RangePicker
+              value={dateRange}
+              onChange={(_dateStrings, dates) => {
+                if (dates && dates[0] && dates[1]) {
+                  const start = dates[0].toDate();
+                  start.setHours(0, 0, 0, 0);
+                  const end = dates[1].toDate();
+                  end.setHours(23, 59, 59, 999);
+                  setDateRange([start, end]);
+                }
+              }}
+              style={{ width: 280 }}
+            />
+          </div>
         </div>
 
         {loading ? (
@@ -254,15 +324,13 @@ const UsageSettings: React.FC = () => {
               </div>
             </div>
 
-            {/* Line Chart */}
-            {dailyUsage.length > 0 && (
-              <div className='bg-aou-1 rd-12px p-16px'>
-                <h3 className='text-16px font-500 m-0 mb-16px'>일별 사용량</h3>
-                <div style={{ height: 300 }}>
-                  <Line data={chartData} options={chartOptions} />
-                </div>
+            {/* Line Chart - Always show if we have a valid date range */}
+            <div className='bg-aou-1 rd-12px p-16px'>
+              <h3 className='text-16px font-500 m-0 mb-16px'>일별 사용량</h3>
+              <div style={{ height: 300 }}>
+                <Line data={chartData} options={chartOptions} />
               </div>
-            )}
+            </div>
 
             {/* Usage Table */}
             {tableData.length > 0 ? (

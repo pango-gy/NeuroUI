@@ -92,7 +92,8 @@ export class ModelProvisioningService {
       totalTokenCount?: number;
       thoughtsTokenCount?: number;
       cachedContentTokenCount?: number;
-    }
+    },
+    workspaceId?: string
   ) {
     if (!userId || !db) {
       return;
@@ -115,7 +116,7 @@ export class ModelProvisioningService {
       // Calculate cost
       const cost = (inputTokens / 1_000_000) * PRICE_INPUT + ((outputTokens + thoughtsTokens) / 1_000_000) * PRICE_OUTPUT + (cachedTokens / 1_000_000) * PRICE_CACHE;
 
-      const docData = {
+      const docData: any = {
         userId,
         model,
         input_tokens: inputTokens,
@@ -126,6 +127,11 @@ export class ModelProvisioningService {
         cost: parseFloat(cost.toFixed(6)),
         timestamp: serverTimestamp(),
       };
+
+      if (workspaceId) {
+        docData.workspaceId = workspaceId;
+      }
+
       await addDoc(logsRef, docData);
     } catch (error: unknown) {
       console.error('[ModelProvisioning] Failed to log usage:', error);

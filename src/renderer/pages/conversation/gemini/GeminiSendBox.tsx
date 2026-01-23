@@ -35,6 +35,7 @@ const useGeminiSendBoxDraft = getSendBoxDraftHook('gemini', {
 
 const useGeminiMessage = (conversation_id: string) => {
   const { user } = useAuth();
+  const { workspace } = useConversationContext();
   const addOrUpdateMessage = useAddOrUpdateMessage();
   const [running, setRunning] = useState(false);
   const [thought, setThought] = useState<ThoughtData>({
@@ -82,7 +83,7 @@ const useGeminiMessage = (conversation_id: string) => {
 
               // Log usage to Firebase for billing
               if (user?.id) {
-                void ModelProvisioningService.logUsage(user.id, 'gemini-3-pro-preview', finishData.usageMetadata);
+                void ModelProvisioningService.logUsage(user.id, 'gemini-3-pro-preview', finishData.usageMetadata, workspace?.id);
               }
 
               // 持久化 token 使用统计到会话的 extra.lastTokenUsage 字段
@@ -118,7 +119,7 @@ const useGeminiMessage = (conversation_id: string) => {
 
               // Log usage to Firebase for billing
               if (user?.id) {
-                void ModelProvisioningService.logUsage(user.id, 'gemini-3-pro-preview', finishedData.usageMetadata);
+                void ModelProvisioningService.logUsage(user.id, 'gemini-3-pro-preview', finishedData.usageMetadata, workspace?.id);
               }
 
               // 持久化 token 使用统计到会话的 extra.lastTokenUsage 字段
