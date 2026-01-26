@@ -5,7 +5,7 @@
  */
 
 import type { TelemetryTarget, GeminiCLIExtension, FallbackIntent } from '@office-ai/aioncli-core';
-import { ApprovalMode, Config, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_MEMORY_FILE_FILTERING_OPTIONS, FileDiscoveryService, getCurrentGeminiMdFilename, loadServerHierarchicalMemory, setGeminiMdFilename as setServerGeminiMdFilename, SimpleExtensionLoader } from '@office-ai/aioncli-core';
+import { ApprovalMode, Config, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_MEMORY_FILE_FILTERING_OPTIONS, FileDiscoveryService, getCurrentGeminiMdFilename, loadServerHierarchicalMemory, setGeminiMdFilename as setServerGeminiMdFilename, SimpleExtensionLoader, PolicyDecision } from '@office-ai/aioncli-core';
 import process from 'node:process';
 import type { Settings } from './settings';
 import { annotateActiveExtensions } from './extension';
@@ -170,6 +170,11 @@ export async function loadCliConfig({ workspace, settings, extensions, sessionId
     userMemory: memoryContent,
     geminiMdFileCount: fileCount,
     approvalMode: argv.yolo || false ? ApprovalMode.YOLO : ApprovalMode.DEFAULT,
+    // PolicyEngine 설정: MCP 도구 호출 시 매번 사용자 확인 대신 기본 허용
+    // PolicyEngine config: Allow MCP tool calls by default instead of asking user each time
+    policyEngineConfig: {
+      defaultDecision: PolicyDecision.ALLOW,
+    },
     // AionUi 是桌面应用，支持用户交互确认，需要设置 interactive: true
     // AionUi is a desktop app with user interaction support, needs interactive: true
     interactive: true,

@@ -6,7 +6,7 @@
 
 import type { TProviderWithModel } from '@/common/storage';
 import { Type } from '@google/genai';
-import type { Config, ToolResult, ToolInvocation, ToolLocation, ToolCallConfirmationDetails, ToolResultDisplay } from '@office-ai/aioncli-core';
+import type { Config, ToolResult, ToolInvocation, ToolLocation, ToolCallConfirmationDetails, ToolResultDisplay, MessageBus } from '@office-ai/aioncli-core';
 import { BaseDeclarativeTool, BaseToolInvocation, Kind, getErrorMessage, ToolErrorType } from '@office-ai/aioncli-core';
 import * as fs from 'fs';
 import { jsonrepair } from 'jsonrepair';
@@ -134,6 +134,7 @@ export class ImageGenerationTool extends BaseDeclarativeTool<ImageGenerationTool
   constructor(
     private readonly config: Config,
     private readonly imageGenerationModel: TProviderWithModel,
+    messageBus: MessageBus,
     private readonly proxy?: string
   ) {
     super(
@@ -186,6 +187,7 @@ IMPORTANT: When user provides multiple images (like @img1.jpg @img2.png), ALWAYS
         },
         required: ['prompt'],
       },
+      messageBus,
       true, // isOutputMarkdown
       false // canUpdateOutput
     );
@@ -249,8 +251,8 @@ IMPORTANT: When user provides multiple images (like @img1.jpg @img2.png), ALWAYS
     return null;
   }
 
-  protected createInvocation(params: ImageGenerationToolParams): ToolInvocation<ImageGenerationToolParams, ToolResult> {
-    return new ImageGenerationInvocation(this.config, this.imageGenerationModel, params, this.proxy);
+  protected createInvocation(params: ImageGenerationToolParams, messageBus: MessageBus): ToolInvocation<ImageGenerationToolParams, ToolResult> {
+    return new ImageGenerationInvocation(this.config, this.imageGenerationModel, params, messageBus, this.proxy);
   }
 }
 
@@ -262,9 +264,10 @@ class ImageGenerationInvocation extends BaseToolInvocation<ImageGenerationToolPa
     private readonly config: Config,
     private readonly imageGenerationModel: TProviderWithModel,
     params: ImageGenerationToolParams,
+    messageBus: MessageBus,
     private readonly proxy?: string
   ) {
-    super(params);
+    super(params, messageBus);
 
     // Initialize the rotating client using factory
     this.currentModel = this.imageGenerationModel.useModel;

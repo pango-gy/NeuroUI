@@ -46,33 +46,14 @@ const McpToolDisplay: React.FC<{ content: McpToolUpdate }> = ({ content }) => {
 
   return (
     <BaseToolCallDisplay toolCallId={toolCallId} title={getDisplayTitle()} status={status} description={description} icon='🔌'>
-      {/* Display tool details if available 显示工具详情 */}
+      {/* Display tool name only - simplified view */}
       {toolDetails && (
-        <div className='text-sm mb-2'>
-          <div className='text-xs text-t-secondary mb-1'>{t('tools.labels.tool_details')}</div>
-          <div className='bg-1 p-2 rounded text-sm border border-b-base'>
-            <div className='flex items-center gap-2'>
-              <Tag size='small' color='purple'>
-                {t('tools.labels.tool')}
-              </Tag>
-              <span className='font-mono text-xs text-t-primary'>{toolDetails.toolName}</span>
-            </div>
-            {toolDetails.arguments && (
-              <div className='mt-2'>
-                <div className='text-xs text-t-secondary mb-1'>{t('tools.labels.arguments')}</div>
-                <pre className='text-xs bg-2 p-2 rounded border border-b-base overflow-x-auto text-t-primary'>{JSON.stringify(toolDetails.arguments, null, 2)}</pre>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Display result if available for end events 显示结果 */}
-      {subtype === 'mcp_tool_call_end' && data?.result && (
-        <div className='text-sm mb-2'>
-          <div className='text-xs text-t-secondary mb-1'>{t('tools.labels.result')}</div>
-          <div className='bg-1 p-2 rounded text-sm max-h-40 overflow-y-auto border border-b-base'>
-            <pre className='text-xs whitespace-pre-wrap text-t-primary'>{typeof data.result === 'string' ? data.result : JSON.stringify(data.result, null, 2)}</pre>
+        <div className='text-sm'>
+          <div className='flex items-center gap-2'>
+            <Tag size='small' color='purple'>
+              {t('tools.labels.tool')}
+            </Tag>
+            <span className='font-mono text-xs text-t-primary'>{toolDetails.toolName}</span>
           </div>
         </div>
       )}

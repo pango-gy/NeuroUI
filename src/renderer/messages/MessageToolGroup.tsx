@@ -484,6 +484,9 @@ const MessageToolGroup: React.FC<IMessageToolGroupProps> = ({ message }) => {
 
         // 通用工具调用展示 Generic tool call display
         // 将可展开的长内容放在 Alert 下方，保持 Alert 仅展示头部信息
+        // MCP 도구 여부 확인 (name 또는 description에 'MCP Server'가 포함)
+        const isMcpTool = name?.includes('MCP Server') || description?.includes('MCP Server');
+
         return (
           <div key={callId}>
             <Alert
@@ -500,7 +503,8 @@ const MessageToolGroup: React.FC<IMessageToolGroupProps> = ({ message }) => {
               }
             />
 
-            {(description || resultDisplay) && (
+            {/* MCP 도구는 결과 숨김, 일반 도구만 표시 */}
+            {!isMcpTool && (description || resultDisplay) && (
               <div className='mt-8px'>
                 {description && <div className='text-12px text-t-secondary whitespace-pre-wrap break-words mb-2'>{description}</div>}
                 {resultDisplay && (

@@ -7,7 +7,7 @@
 import type { TProviderWithModel } from '@/common/storage';
 import { uuid } from '@/common/utils';
 import type { GeminiClient } from '@office-ai/aioncli-core';
-import { AuthType, Config } from '@office-ai/aioncli-core';
+import { AuthType, Config, PolicyDecision } from '@office-ai/aioncli-core';
 import { ImageGenerationTool } from './img-gen';
 import { WebFetchTool } from './web-fetch';
 import { WebSearchTool } from './web-search';
@@ -96,6 +96,10 @@ export class ConversationToolConfig {
       userMemory: '',
       geminiMdFileCount: 0,
       model: geminiModel.useModel,
+      // PolicyEngine 설정: 기본 허용
+      policyEngineConfig: {
+        defaultDecision: PolicyDecision.ALLOW,
+      },
     });
   }
 
@@ -118,15 +122,17 @@ export class ConversationToolConfig {
   async registerCustomTools(config: Config, geminiClient: GeminiClient): Promise<void> {
     const toolRegistry = await config.getToolRegistry();
 
+    const messageBus = config.getMessageBus();
+
     // 注册 aionui_web_fetch 工具（所有模型）
     if (this.useAionuiWebFetch) {
-      const customWebFetchTool = new WebFetchTool(geminiClient);
+      const customWebFetchTool = new WebFetchTool(geminiClient, messageBus);
       toolRegistry.registerTool(customWebFetchTool);
     }
 
     if (this.imageGenerationModel) {
       // 注册 aionui_image_generation 工具（所有模型）
-      const imageGenTool = new ImageGenerationTool(config, this.imageGenerationModel, this.proxy);
+      const imageGenTool = new ImageGenerationTool(config, this.imageGenerationModel, messageBus, this.proxy);
       toolRegistry.registerTool(imageGenTool);
     }
 
@@ -152,7 +158,7 @@ export class ConversationToolConfig {
 
         // 只有成功创建 Config 时才注册工具
         if (this.dedicatedConfig && this.dedicatedGeminiClient) {
-          const customWebSearchTool = new WebSearchTool(this.dedicatedConfig);
+          const customWebSearchTool = new WebSearchTool(this.dedicatedConfig, this.dedicatedConfig.getMessageBus());
           toolRegistry.registerTool(customWebSearchTool);
         }
         // Google未登录时静默跳过，不影响其他工具
