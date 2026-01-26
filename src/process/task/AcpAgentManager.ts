@@ -1,15 +1,17 @@
 import { AcpAgent } from '@/agent/acp';
 import { ipcBridge } from '@/common';
-import type { AcpBackend } from '@/types/acpTypes';
-import { ACP_BACKENDS_ALL } from '@/types/acpTypes';
 import type { TMessage } from '@/common/chatLib';
 import { transformMessage } from '@/common/chatLib';
-import type { IConfirmMessageParams, IResponseMessage } from '@/common/ipcBridge';
+import { AIONUI_FILES_MARKER } from '@/common/constants';
+import type { IResponseMessage } from '@/common/ipcBridge';
 import { parseError, uuid } from '@/common/utils';
+import type { AcpBackend, AcpPermissionOption, AcpPermissionRequest } from '@/types/acpTypes';
+import { ACP_BACKENDS_ALL } from '@/types/acpTypes';
 import { ProcessConfig } from '../initStorage';
 import { addMessage, addOrUpdateMessage, nextTickToLocalFinish } from '../message';
-import BaseAgentManager from './BaseAgentManager';
 import { handlePreviewOpenEvent } from '../utils/previewUtils';
+import { prepareFirstMessageWithSkillsIndex } from './agentUtils';
+import BaseAgentManager from './BaseAgentManager';
 
 interface AcpAgentManagerData {
   workspace?: string;
@@ -18,12 +20,16 @@ interface AcpAgentManagerData {
   customWorkspace?: boolean;
   conversation_id: string;
   customAgentId?: string; // 用于标识特定自定义代理的 UUID / UUID for identifying specific custom agent
+  presetContext?: string; // 智能助手的预设规则/提示词 / Preset context from smart assistant
+  /** 启用的 skills 列表，用于过滤 SkillManager 加载的 skills / Enabled skills list for filtering SkillManager skills */
+  enabledSkills?: string[];
 }
 
-class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData> {
+class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData, AcpPermissionOption> {
   workspace: string;
   agent: AcpAgent;
   private bootstrap: Promise<AcpAgent> | undefined;
+  private isFirstMessage: boolean = true;
   options: AcpAgentManagerData;
 
   constructor(data: AcpAgentManagerData) {
@@ -67,10 +73,16 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData> {
           cliPath = config[data.backend].cliPath;
         }
 
-        // Get acpArgs from backend config (for goose, auggie, etc.)
+        // Get acpArgs from backend config (for goose, auggie, opencode, etc.)
         const backendConfig = ACP_BACKENDS_ALL[data.backend];
         if (backendConfig?.acpArgs) {
           customArgs = backendConfig.acpArgs;
+        }
+
+        // 如果没有配置 cliPath，使用 ACP_BACKENDS_ALL 中的默认 cliCommand
+        // If cliPath is not configured, fallback to default cliCommand from ACP_BACKENDS_ALL
+        if (!cliPath && backendConfig?.cliCommand) {
+          cliPath = backendConfig.cliCommand;
         }
       } else {
         // backend === 'custom' but no customAgentId - this is an invalid state
@@ -85,23 +97,38 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData> {
         workingDir: data.workspace,
         customArgs: customArgs,
         customEnv: customEnv,
-        onStreamEvent: (v) => {
+        onStreamEvent: (message) => {
           // Handle preview_open event (chrome-devtools navigation interception)
           // 处理 preview_open 事件（chrome-devtools 导航拦截）
-          if (handlePreviewOpenEvent(v)) {
+          if (handlePreviewOpenEvent(message)) {
             return; // Don't process further / 不需要继续处理
           }
 
-          if (v.type !== 'thought') {
-            const tMessage = transformMessage(v as IResponseMessage);
+          if (message.type !== 'thought') {
+            const tMessage = transformMessage(message as IResponseMessage);
             if (tMessage) {
-              addOrUpdateMessage(v.conversation_id, tMessage, data.backend);
+              addOrUpdateMessage(message.conversation_id, tMessage, data.backend);
             }
           }
-          ipcBridge.acpConversation.responseStream.emit(v);
+          ipcBridge.acpConversation.responseStream.emit(message as IResponseMessage);
         },
         onSignalEvent: (v) => {
           // 仅发送信号到前端，不更新消息列表
+          if (v.type === 'acp_permission') {
+            const { toolCall, options } = v.data as AcpPermissionRequest;
+            this.addConfirmation({
+              title: toolCall.title || 'messages.permissionRequest',
+              action: 'messages.command',
+              id: v.msg_id,
+              description: toolCall.rawInput?.description || 'messages.agentRequestingPermission',
+              callId: toolCall.toolCallId || v.msg_id,
+              options: options.map((option) => ({
+                label: option.name,
+                value: option,
+              })),
+            });
+            return;
+          }
           ipcBridge.acpConversation.responseStream.emit(v);
         },
       });
@@ -119,6 +146,20 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData> {
       await this.initAgent(this.options);
       // Save user message to chat history ONLY after successful sending
       if (data.msg_id && data.content) {
+        let contentToSend = data.content;
+        if (contentToSend.includes(AIONUI_FILES_MARKER)) {
+          contentToSend = contentToSend.split(AIONUI_FILES_MARKER)[0].trimEnd();
+        }
+
+        // 首条消息时注入预设规则和 skills 索引（来自智能助手配置）
+        // Inject preset context and skills INDEX on first message (from smart assistant config)
+        if (this.isFirstMessage) {
+          contentToSend = await prepareFirstMessageWithSkillsIndex(contentToSend, {
+            presetContext: this.options.presetContext,
+            enabledSkills: this.options.enabledSkills,
+          });
+        }
+
         const userMessage: TMessage = {
           id: data.msg_id,
           msg_id: data.msg_id,
@@ -126,7 +167,7 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData> {
           position: 'right',
           conversation_id: this.conversation_id,
           content: {
-            content: data.content,
+            content: data.content, // Save original content to history
           },
           createdAt: Date.now(),
         };
@@ -138,6 +179,13 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData> {
           data: userMessage.content.content,
         };
         ipcBridge.acpConversation.responseStream.emit(userResponseMessage);
+
+        const result = await this.agent.sendMessage({ ...data, content: contentToSend });
+        // 首条消息发送后标记，无论是否有 presetContext
+        if (this.isFirstMessage) {
+          this.isFirstMessage = false;
+        }
+        return result;
       }
       return await this.agent.sendMessage(data);
     } catch (e) {
@@ -164,9 +212,14 @@ class AcpAgentManager extends BaseAgentManager<AcpAgentManagerData> {
     }
   }
 
-  async confirmMessage(data: Omit<IConfirmMessageParams, 'conversation_id'>) {
+  async confirm(id: string, callId: string, data: AcpPermissionOption) {
+    super.confirm(id, callId, data);
     await this.bootstrap;
-    await this.agent.confirmMessage(data);
+    void this.agent.confirmMessage({
+      confirmKey: data.optionId,
+      // msg_id: dat;
+      callId: callId,
+    });
   }
 }
 

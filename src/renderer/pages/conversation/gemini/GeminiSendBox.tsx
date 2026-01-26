@@ -9,6 +9,7 @@ import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/ThoughtD
 import SendBox from '@/renderer/components/sendbox';
 import { useAuth } from '@/renderer/context/AuthContext';
 import { useConversationContext } from '@/renderer/context/ConversationContext';
+import { useAutoTitle } from '@/renderer/hooks/useAutoTitle';
 import { useLatestRef } from '@/renderer/hooks/useLatestRef';
 import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/useSendBoxDraft';
 import { createSetUploadFile, useSendBoxFiles } from '@/renderer/hooks/useSendBoxFiles';
@@ -19,6 +20,7 @@ import { ModelProvisioningService } from '@/renderer/services/ModelProvisioningS
 import { iconColors } from '@/renderer/theme/colors';
 import { emitter, useAddEventListener } from '@/renderer/utils/emitter';
 import { mergeFileSelectionItems } from '@/renderer/utils/fileSelection';
+import { buildDisplayMessage, collectSelectedFiles } from '@/renderer/utils/messageFiles';
 import { getModelContextLimit } from '@/renderer/utils/modelContextLimits';
 import { Button, Message, Tag } from '@arco-design/web-react';
 import { Plus } from '@icon-park/react';
@@ -101,6 +103,10 @@ const useGeminiMessage = (conversation_id: string) => {
           break;
         case 'finished':
           {
+            // 응답 완료 - 상태 초기화
+            setRunning(false);
+            setThought({ subject: '', description: '' });
+
             const finishedData = message.data as {
               reason?: string;
               usageMetadata?: {
@@ -142,6 +148,16 @@ const useGeminiMessage = (conversation_id: string) => {
           {
             // Backend handles persistence, Frontend only updates UI
             addOrUpdateMessage(transformMessage(message));
+            // content 메시지가 오면 응답이 시작된 것이므로 상태 초기화
+            if (eventType === 'content') {
+              setRunning(false);
+              setThought({ subject: '', description: '' });
+            }
+            // error 메시지가 오면 running 상태도 초기화
+            if (eventType === 'error') {
+              setRunning(false);
+              setThought({ subject: '', description: '' });
+            }
           }
           break;
       }

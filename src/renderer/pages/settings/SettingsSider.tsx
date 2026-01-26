@@ -1,6 +1,6 @@
 import FlexFullContainer from '@/renderer/components/FlexFullContainer';
 import { Tooltip } from '@arco-design/web-react';
-import { FullScreen, Info, PieTwo, System, Toolkit } from '@icon-park/react';
+import { Computer, FullScreen, Info, PieTwo, System, Toolkit, Robot } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +19,11 @@ const SettingsSider: React.FC<{ collapsed?: boolean }> = ({ collapsed = false })
         path: 'usage',
       },
       {
+        label: t('settings.assistants', { defaultValue: 'Assistants' }),
+        icon: <Robot />,
+        path: 'agent',
+      },
+      {
         label: t('settings.tools'),
         icon: <Toolkit />,
         path: 'tools',
@@ -35,7 +40,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean }> = ({ collapsed = false })
       // },
       {
         label: t('settings.display'),
-        icon: <FullScreen />,
+        icon: <Computer />,
         path: 'display',
       },
       {

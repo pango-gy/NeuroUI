@@ -5,14 +5,33 @@
  */
 
 import type { IMessageText } from '@/common/chatLib';
-import classNames from 'classnames';
-import React, { useMemo, useState } from 'react';
-import MarkdownView from '../components/Markdown';
-import CollapsibleContent from '../components/CollapsibleContent';
-import { Copy } from '@icon-park/react';
-import { useTranslation } from 'react-i18next';
+import { AIONUI_FILES_MARKER } from '@/common/constants';
 import { iconColors } from '@/renderer/theme/colors';
 import { Alert, Tooltip } from '@arco-design/web-react';
+import { Copy } from '@icon-park/react';
+import classNames from 'classnames';
+import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import CollapsibleContent from '../components/CollapsibleContent';
+import FilePreview from '../components/FilePreview';
+import HorizontalFileList from '../components/HorizontalFileList';
+import MarkdownView from '../components/Markdown';
+
+const parseFileMarker = (content: string) => {
+  const markerIndex = content.indexOf(AIONUI_FILES_MARKER);
+  if (markerIndex === -1) {
+    return { text: content, files: [] as string[] };
+  }
+  const text = content.slice(0, markerIndex).trimEnd();
+  const afterMarker = content.slice(markerIndex + AIONUI_FILES_MARKER.length).trim();
+  const files = afterMarker
+    ? afterMarker
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+    : [];
+  return { text, files };
+};
 
 const useFormatContent = (content: string) => {
   return useMemo(() => {
@@ -30,7 +49,8 @@ const useFormatContent = (content: string) => {
 };
 
 const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
-  const { data, json } = useFormatContent(message.content.content);
+  const { text, files } = parseFileMarker(message.content.content);
+  const { data, json } = useFormatContent(text);
   const { t } = useTranslation();
   const [showCopyAlert, setShowCopyAlert] = useState(false);
   const isUserMessage = message.position === 'right';
@@ -41,7 +61,9 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
   }
 
   const handleCopy = () => {
-    const textToCopy = json ? JSON.stringify(data, null, 2) : message.content.content;
+    const baseText = json ? JSON.stringify(data, null, 2) : text;
+    const fileList = files.length ? `Files:\n${files.map((path) => `- ${path}`).join('\n')}\n\n` : '';
+    const textToCopy = fileList + baseText;
     navigator.clipboard
       .writeText(textToCopy)
       .then(() => {
@@ -64,6 +86,21 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
   return (
     <>
       <div className={classNames('flex flex-col group', isUserMessage ? 'items-end' : 'items-start')}>
+        {files.length > 0 && (
+          <div className={classNames('mt-6px', { 'self-end': isUserMessage })}>
+            {files.length === 1 ? (
+              <div className='flex items-center'>
+                <FilePreview path={files[0]} onRemove={() => undefined} readonly />
+              </div>
+            ) : (
+              <HorizontalFileList>
+                {files.map((path) => (
+                  <FilePreview key={path} path={path} onRemove={() => undefined} readonly />
+                ))}
+              </HorizontalFileList>
+            )}
+          </div>
+        )}
         <div
           className={classNames('rd-8px rd-tr-2px [&>p:first-child]:mt-0px [&>p:last-child]:mb-0px', {
             'max-w-[95%] md:max-w-[90%] bg-aou-2 p-8px': isUserMessage,
@@ -79,14 +116,14 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
             <MarkdownView codeStyle={{ marginTop: 4, marginBlock: 4 }}>{data}</MarkdownView>
           )}
         </div>
-        <div
+        {/* <div
           className={classNames('h-32px flex items-center mt-4px', {
             'justify-end': isUserMessage,
             'justify-start': !isUserMessage,
           })}
         >
           {copyButton}
-        </div>
+        </div> */}
       </div>
       {showCopyAlert && <Alert type='success' content={t('messages.copySuccess')} showIcon className='fixed top-20px left-50% transform -translate-x-50% z-9999 w-max max-w-[80%]' style={{ boxShadow: '0px 2px 12px rgba(0,0,0,0.12)' }} closable={false} />}
     </>

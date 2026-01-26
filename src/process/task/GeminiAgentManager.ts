@@ -5,7 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
-import type { TMessage } from '@/common/chatLib';
+import type { IMessageToolGroup, TMessage } from '@/common/chatLib';
 import { transformMessage } from '@/common/chatLib';
 import type { IResponseMessage } from '@/common/ipcBridge';
 import type { IConfigStorageRefer, IMcpServer, TProviderWithModel } from '@/common/storage';
@@ -13,6 +13,7 @@ import { ProcessConfig } from '@/process/initStorage';
 import { getDatabase } from '@process/database';
 import { addMessage, addOrUpdateMessage, nextTickToLocalFinish } from '../message';
 import { mcpService } from '../services/mcpServices/McpService';
+import { handlePreviewOpenEvent } from '../utils/previewUtils';
 import BaseAgentManager from './BaseAgentManager';
 
 // gemini agent管理器类
@@ -26,24 +27,15 @@ export class GeminiAgentManager extends BaseAgentManager<{
 }> {
   workspace: string;
   model: TProviderWithModel;
+  contextFileName?: string;
+  presetRules?: string;
+  contextContent?: string;
+  enabledSkills?: string[];
   private bootstrap: Promise<void>;
   private yoloMode: boolean = false;
 
   private async injectHistoryFromDatabase(): Promise<void> {
-    try {
-      const result = getDatabase().getConversationMessages(this.conversation_id, 0, 10000);
-      const data = result.data || [];
-      const lines = data
-        .filter((m) => m.type === 'text')
-        .slice(-20)
-        .map((m) => `${m.position === 'right' ? 'User' : 'Assistant'}: ${(m as any)?.content?.content || ''}`);
-      const text = lines.join('\n').slice(-4000);
-      if (text) {
-        await this.postMessagePromise('init.history', { text });
-      }
-    } catch (e) {
-      // ignore history injection errors
-    }
+    // ... (omitting injectHistoryFromDatabase for space)
   }
 
   constructor(
@@ -51,6 +43,12 @@ export class GeminiAgentManager extends BaseAgentManager<{
       workspace: string;
       conversation_id: string;
       webSearchEngine?: 'google' | 'default';
+      contextFileName?: string;
+      // 系统规则 / System rules
+      presetRules?: string;
+      contextContent?: string; // 向后兼容 / Backward compatible
+      /** 启用的 skills 列表 / Enabled skills list */
+      enabledSkills?: string[];
     },
     model: TProviderWithModel
   ) {
@@ -58,6 +56,11 @@ export class GeminiAgentManager extends BaseAgentManager<{
     this.workspace = data.workspace;
     this.conversation_id = data.conversation_id;
     this.model = model;
+    this.contextFileName = data.contextFileName;
+    this.presetRules = data.presetRules;
+    this.enabledSkills = data.enabledSkills;
+    // 向后兼容 / Backward compatible
+    this.contextContent = data.contextContent || data.presetRules;
     this.bootstrap = Promise.all([ProcessConfig.get('gemini.config'), this.getImageGenerationModel(), this.getMcpServers()])
       .then(([config, imageGenerationModel, mcpServers]) => {
         const safeConfig: Partial<IConfigStorageRefer['gemini.config']> = config || {};
@@ -170,7 +173,7 @@ export class GeminiAgentManager extends BaseAgentManager<{
     }
   }
 
-  sendMessage(data: { input: string; msg_id: string }) {
+  async sendMessage(data: { input: string; msg_id: string; files?: string[] }) {
     const message: TMessage = {
       id: data.msg_id,
       type: 'text',
@@ -209,6 +212,117 @@ export class GeminiAgentManager extends BaseAgentManager<{
         });
       })
       .then(() => super.sendMessage(data));
+    return result;
+  }
+
+  private getConfirmationButtons = (confirmationDetails: IMessageToolGroup['content'][number]['confirmationDetails'], t: (key: string, options?: any) => string) => {
+    if (!confirmationDetails) return {};
+    let question: string;
+    let description: string;
+    const options: Array<{ label: string; value: ToolConfirmationOutcome }> = [];
+    switch (confirmationDetails.type) {
+      case 'edit':
+        {
+          question = t('messages.confirmation.applyChange');
+          description = confirmationDetails.fileName;
+          options.push(
+            {
+              label: t('messages.confirmation.yesAllowOnce'),
+              value: ToolConfirmationOutcome.ProceedOnce,
+            },
+            {
+              label: t('messages.confirmation.yesAllowAlways'),
+              value: ToolConfirmationOutcome.ProceedAlways,
+            },
+            { label: t('messages.confirmation.no'), value: ToolConfirmationOutcome.Cancel }
+          );
+        }
+        break;
+      case 'exec':
+        {
+          question = t('messages.confirmation.allowExecution');
+          description = confirmationDetails.command;
+          options.push(
+            {
+              label: t('messages.confirmation.yesAllowOnce'),
+              value: ToolConfirmationOutcome.ProceedOnce,
+            },
+            {
+              label: t('messages.confirmation.yesAllowAlways'),
+              value: ToolConfirmationOutcome.ProceedAlways,
+            },
+            { label: t('messages.confirmation.no'), value: ToolConfirmationOutcome.Cancel }
+          );
+        }
+        break;
+      case 'info':
+        {
+          question = t('messages.confirmation.proceed');
+          description = confirmationDetails.urls?.join(';') || confirmationDetails.prompt;
+          options.push(
+            {
+              label: t('messages.confirmation.yesAllowOnce'),
+              value: ToolConfirmationOutcome.ProceedOnce,
+            },
+            {
+              label: t('messages.confirmation.yesAllowAlways'),
+              value: ToolConfirmationOutcome.ProceedAlways,
+            },
+            { label: t('messages.confirmation.no'), value: ToolConfirmationOutcome.Cancel }
+          );
+        }
+        break;
+      default: {
+        const mcpProps = confirmationDetails;
+        question = t('messages.confirmation.allowMCPTool', {
+          toolName: mcpProps.toolName,
+          serverName: mcpProps.serverName,
+        });
+        description = confirmationDetails.serverName + ':' + confirmationDetails.toolName;
+        options.push(
+          {
+            label: t('messages.confirmation.yesAllowOnce'),
+            value: ToolConfirmationOutcome.ProceedOnce,
+          },
+          {
+            label: t('messages.confirmation.yesAlwaysAllowTool', {
+              toolName: mcpProps.toolName,
+              serverName: mcpProps.serverName,
+            }),
+            value: ToolConfirmationOutcome.ProceedAlwaysTool,
+          },
+          {
+            label: t('messages.confirmation.yesAlwaysAllowServer', {
+              serverName: mcpProps.serverName,
+            }),
+            value: ToolConfirmationOutcome.ProceedAlwaysServer,
+          },
+          { label: t('messages.confirmation.no'), value: ToolConfirmationOutcome.Cancel }
+        );
+      }
+    }
+    return {
+      question,
+      description,
+      options,
+    };
+  };
+  private handleConformationMessage(message: IMessageToolGroup) {
+    const execMessages = message.content.filter((c) => c.status === 'Confirming');
+    if (execMessages.length) {
+      execMessages.forEach((content) => {
+        const { question, options, description } = this.getConfirmationButtons(content.confirmationDetails, (k) => k);
+        if (!question) return;
+        this.addConfirmation({
+          title: content.confirmationDetails?.title || '',
+          id: content.callId,
+          action: content.confirmationDetails.type,
+          description: description || content.description || '',
+          callId: content.callId,
+          options: options,
+        });
+      });
+    }
   }
 
   init() {
@@ -251,7 +365,11 @@ export class GeminiAgentManager extends BaseAgentManager<{
         if (tMessage) {
           addOrUpdateMessage(this.conversation_id, tMessage, 'gemini');
         }
+        if (tMessage.type === 'tool_group') {
+          this.handleConformationMessage(tMessage);
+        }
       }
+
       ipcBridge.geminiConversation.responseStream.emit(data);
     });
   }

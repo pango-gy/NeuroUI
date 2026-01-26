@@ -4,9 +4,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
-import ChatHistory from './pages/conversation/ChatHistory';
+import WorkspaceGroupedHistory from './pages/conversation/WorkspaceGroupedHistory';
 import SettingsSider from './pages/settings/SettingsSider';
 import { iconColors } from './theme/colors';
+import { usePreviewContext } from './pages/conversation/preview';
 
 interface SiderProps {
   onSessionClick?: () => void;
@@ -20,6 +21,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { logout, user, workspaces, currentWorkspace, switchWorkspace } = useAuth();
+  const { closePreview } = usePreviewContext();
   const isSettings = pathname.startsWith('/settings');
   const lastNonSettingsPathRef = useRef('/guid');
   const [searchValue, setSearchValue] = useState('');
@@ -119,6 +121,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
             <div
               className='flex items-center justify-start gap-10px px-12px py-8px hover:bg-hover rd-0.5rem mb-8px cursor-pointer group'
               onClick={() => {
+                closePreview();
                 Promise.resolve(navigate('/guid')).catch((error) => {
                   console.error('Navigation failed:', error);
                 });
@@ -131,7 +134,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               <span className='collapsed-hidden font-bold text-t-primary'>{t('conversation.welcome.newConversation')}</span>
             </div>
           </Tooltip>
-          <ChatHistory collapsed={collapsed} onSessionClick={onSessionClick}></ChatHistory>
+          <WorkspaceGroupedHistory collapsed={collapsed} onSessionClick={onSessionClick}></WorkspaceGroupedHistory>
         </>
       )}
 

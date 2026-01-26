@@ -5,8 +5,9 @@
  */
 
 import type { TelemetryTarget, GeminiCLIExtension, FallbackIntent } from '@office-ai/aioncli-core';
-import { ApprovalMode, Config, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_MEMORY_FILE_FILTERING_OPTIONS, FileDiscoveryService, getCurrentGeminiMdFilename, loadServerHierarchicalMemory, setGeminiMdFilename as setServerGeminiMdFilename, SimpleExtensionLoader } from '@office-ai/aioncli-core';
+import { ApprovalMode, Config, DEFAULT_GEMINI_EMBEDDING_MODEL, DEFAULT_GEMINI_MODEL, DEFAULT_MEMORY_FILE_FILTERING_OPTIONS, FileDiscoveryService, getCurrentGeminiMdFilename, loadServerHierarchicalMemory, setGeminiMdFilename as setServerGeminiMdFilename, SimpleExtensionLoader, PREVIEW_GEMINI_MODEL } from '@office-ai/aioncli-core';
 import process from 'node:process';
+import path from 'node:path';
 import type { Settings } from './settings';
 import { annotateActiveExtensions } from './extension';
 import { getCurrentGeminiAgent } from '../index';
@@ -50,10 +51,30 @@ export interface CliArgs {
 
 import type { ConversationToolConfig } from './tools/conversation-tool-config';
 
-export async function loadCliConfig({ workspace, settings, extensions, sessionId, proxy, model, conversationToolConfig, yoloMode, mcpServers }: { workspace: string; settings: Settings; extensions: GeminiCLIExtension[]; sessionId: string; proxy?: string; model?: string; conversationToolConfig: ConversationToolConfig; yoloMode?: boolean; mcpServers?: Record<string, unknown> }): Promise<Config> {
+export interface LoadCliConfigOptions {
+  workspace: string;
+  settings: Settings;
+  extensions: GeminiCLIExtension[];
+  sessionId: string;
+  proxy?: string;
+  model?: string;
+  conversationToolConfig: ConversationToolConfig;
+  yoloMode?: boolean;
+  mcpServers?: Record<string, unknown>;
+  /** 内置 skills 目录路径 / Builtin skills directory path */
+  skillsDir?: string;
+  /** 启用的 skills 列表，用于过滤加载的 skills / Enabled skills list for filtering loaded skills */
+  enabledSkills?: string[];
+}
+
+export async function loadCliConfig({ workspace, settings, extensions, sessionId, proxy, model, conversationToolConfig, yoloMode, mcpServers, skillsDir, enabledSkills }: LoadCliConfigOptions): Promise<Config> {
   const argv: Partial<CliArgs> = {
     yolo: yoloMode,
   };
+
+  // Map 'auto' to the correct aioncli-core model alias
+  // 'auto' 모델을 aioncli-core 모델 별칭으로 매핑
+  const resolvedModel = model === 'auto' ? PREVIEW_GEMINI_MODEL : model;
 
   const debugMode = argv.debug || [process.env.DEBUG, process.env.DEBUG_MODE].some((v) => v === 'true' || v === '1') || false;
   const memoryImportFormat = settings.memoryImportFormat || 'tree';
@@ -61,7 +82,7 @@ export async function loadCliConfig({ workspace, settings, extensions, sessionId
 
   const _ideModeFeature = (argv.ideModeFeature ?? settings.ideModeFeature ?? false) && !process.env.SANDBOX;
 
-  const allExtensions = annotateActiveExtensions(extensions, argv.extensions || []);
+  const allExtensions = annotateActiveExtensions([...extensions], argv.extensions || []);
   const activeExtensions = allExtensions.filter((ext) => ext.isActive);
   // Handle OpenAI API key from command line
   if (argv.openaiApiKey) {
@@ -194,7 +215,7 @@ export async function loadCliConfig({ workspace, settings, extensions, sessionId
     cwd: workspace,
     fileDiscoveryService: fileService,
     bugCommand: settings.bugCommand,
-    model: model || DEFAULT_GEMINI_MODEL,
+    model: resolvedModel || DEFAULT_GEMINI_MODEL,
     // 使用 extensionLoader 替代已废弃的 extensionContextFilePaths 和 extensions 参数
     // Use extensionLoader instead of deprecated extensionContextFilePaths and extensions parameters
     extensionLoader,
@@ -203,6 +224,9 @@ export async function loadCliConfig({ workspace, settings, extensions, sessionId
     noBrowser: !!process.env.NO_BROWSER,
     summarizeToolOutput: settings.summarizeToolOutput,
     ideMode,
+    // 启用预览功能以支持 Gemini 3 等新模型
+    // Enable preview features to support Gemini 3 and other new models
+    previewFeatures: true,
   });
 
   // FallbackModelHandler 返回类型在 aioncli-core v0.18.4 中使用 FallbackIntent
@@ -216,15 +240,23 @@ export async function loadCliConfig({ workspace, settings, extensions, sessionId
   //    aioncli-core's tryRotateApiKey detects env change and calls config.refreshAuth()
   // 3. 返回 'retry_once' 表示本次重试，'stop' 表示停止
   //    Return 'retry_once' for one-time retry, 'stop' to stop retrying
+  //
+  // 重要：返回 'retry_once' 会导致 aioncli-core 重置重试计数并继续重试
+  // IMPORTANT: returning 'retry_once' causes aioncli-core to reset retry count and continue
+  // 对于 RATE_LIMIT 错误，如果没有其他 API key 可用，应该返回 null 让内置重试机制处理
+  // For RATE_LIMIT errors, if no other API keys available, return null to let built-in retry handle it
   const fallbackModelHandler = async (_currentModel: string, _fallbackModel: string, _error?: unknown): Promise<FallbackIntent | null> => {
     try {
       const agent = getCurrentGeminiAgent();
       const apiKeyManager = agent?.getApiKeyManager();
 
       if (!apiKeyManager?.hasMultipleKeys()) {
-        // 单 Key 模式，尝试一次重试（可能是临时错误）
-        // Single key mode, try one retry (might be transient error)
-        return 'retry_once';
+        // 单 Key 模式，返回 'stop' 停止重试
+        // 避免返回 'retry_once' 导致无限重试循环
+        // Single key mode, return 'stop' to stop retrying
+        // Avoid returning 'retry_once' which causes infinite retry loop
+        console.log('[FallbackHandler] Single key mode, stopping retry');
+        return 'stop';
       }
 
       // 轮换到下一个可用的 API Key，这会更新 process.env
@@ -242,7 +274,9 @@ export async function loadCliConfig({ workspace, settings, extensions, sessionId
       return 'stop';
     } catch (e) {
       console.error(`[FallbackHandler] Handler error:`, e);
-      return 'retry_once';
+      // 发生错误时返回 'stop'，停止重试
+      // On error, return 'stop' to stop retrying
+      return 'stop';
     }
   };
 

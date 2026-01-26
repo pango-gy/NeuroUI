@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useInputFocusRing } from '@/renderer/hooks/useInputFocusRing';
 import { usePreviewContext } from '@/renderer/pages/conversation/preview';
 import { Button, Input, Message, Tag } from '@arco-design/web-react';
 import { ArrowUp, CloseSmall } from '@icon-park/react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCompositionInput } from '../hooks/useCompositionInput';
 import { useDragUpload } from '../hooks/useDragUpload';
@@ -42,6 +43,9 @@ const SendBox: React.FC<{
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [isSingleLine, setIsSingleLine] = useState(!defaultMultiLine);
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const isInputActive = isInputFocused;
+  const { activeBorderColor, inactiveBorderColor, activeShadow } = useInputFocusRing();
   const containerRef = useRef<HTMLDivElement>(null);
   const singleLineWidthRef = useRef<number>(0);
   const measurementCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -162,8 +166,8 @@ const SendBox: React.FC<{
   // 使用共享的输入法合成处理
   const { compositionHandlers, createKeyDownHandler } = useCompositionInput();
 
-  // 使用共享的PasteService集成 (파일 첨부 비활성화 시 onFilesAdded를 undefined로)
-  const { onPaste, onFocus } = usePasteService({
+  // 使用共享的PasteService集成
+  const { onPaste, onFocus: handlePasteFocus } = usePasteService({
     supportedExts,
     onFilesAdded: disableFileAttachment ? undefined : onFilesAdded,
     onTextPaste: (text: string) => {
@@ -172,7 +176,9 @@ const SendBox: React.FC<{
       if (textarea && textarea.tagName === 'TEXTAREA') {
         const cursorPosition = textarea.selectionStart;
         const currentValue = textarea.value;
-        const newValue = currentValue.slice(0, cursorPosition) + text + currentValue.slice(cursorPosition);
+        const start = textarea.selectionStart ?? textarea.value.length;
+        const end = textarea.selectionEnd ?? start;
+        const newValue = currentValue.slice(0, start) + text + currentValue.slice(end);
         setInput(newValue);
         // 设置光标到插入文本后的位置
         setTimeout(() => {
@@ -184,6 +190,13 @@ const SendBox: React.FC<{
       }
     },
   });
+  const handleInputFocus = useCallback(() => {
+    handlePasteFocus();
+    setIsInputFocused(true);
+  }, [handlePasteFocus]);
+  const handleInputBlur = useCallback(() => {
+    setIsInputFocused(false);
+  }, []);
 
   const sendMessageHandler = () => {
     if (loading || isLoading) {
@@ -226,8 +239,9 @@ const SendBox: React.FC<{
     <div className={className}>
       <div
         ref={containerRef}
-        className={`relative p-16px border-3 b bg-base b-solid rd-20px flex flex-col overflow-hidden ${isFileDragging ? 'b-dashed' : ''}`}
+        className={`relative p-16px border-3 b bg-dialog-fill-0 b-solid rd-20px flex flex-col overflow-hidden ${isFileDragging ? 'b-dashed' : ''}`}
         style={{
+          transition: 'box-shadow 0.25s ease, border-color 0.25s ease',
           ...(isFileDragging
             ? {
                 backgroundColor: 'var(--color-primary-light-1)',
@@ -236,8 +250,8 @@ const SendBox: React.FC<{
               }
             : {
                 borderWidth: '1px',
-                borderColor: 'var(--border-special, #60577E)',
-                boxShadow: '0px 2px 20px rgba(var(--primary-rgb, 77, 60, 234), 0.1)',
+                borderColor: isInputActive ? activeBorderColor : inactiveBorderColor,
+                boxShadow: isInputActive ? activeShadow : 'none',
               }),
         }}
         {...dragHandlers}
@@ -285,7 +299,8 @@ const SendBox: React.FC<{
               setInput(v);
             }}
             onPaste={onPaste}
-            onFocus={onFocus}
+            onFocus={handleInputFocus}
+            onBlur={handleInputBlur}
             {...compositionHandlers}
             autoSize={isSingleLine ? false : { minRows: 1, maxRows: 10 }}
             onKeyDown={createKeyDownHandler(sendMessageHandler)}

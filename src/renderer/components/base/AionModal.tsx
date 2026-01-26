@@ -10,7 +10,7 @@ import { Close } from '@icon-park/react';
 import classNames from 'classnames';
 import type { CSSProperties } from 'react';
 import React from 'react';
-import { useThemeContext } from '@/renderer/context/ThemeContext';
+import { ThemeContext } from '@/renderer/context/ThemeContext';
 
 // ==================== 类型定义导出 ====================
 
@@ -174,7 +174,9 @@ const AionModal: React.FC<AionModalProps> = ({
   style,
   ...props
 }) => {
-  const { fontScale } = useThemeContext();
+  // Use context directly with fallback to avoid error when rendered outside ThemeProvider
+  const themeContext = React.useContext(ThemeContext);
+  const fontScale = themeContext?.fontScale ?? 1;
   // 处理 contentStyle 配置，转换为 CSS 变量
   const contentBg = contentStyle?.background || 'var(--bg-1)';
   const contentBorderRadius = contentStyle?.borderRadius || '16px';

@@ -7,42 +7,27 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-/**
- * Create symlink for web-tree-sitter from aioncli-core's nested node_modules
- * web-tree-sitter 是 aioncli-core 的嵌套依赖，需要创建 symlink 以便 webpack externals 解析
- */
-function createWebTreeSitterSymlink() {
-  const nodeModulesPath = path.resolve(__dirname, '../node_modules');
-  const symlinkPath = path.join(nodeModulesPath, 'web-tree-sitter');
-  const targetPath = path.join(nodeModulesPath, '@office-ai/aioncli-core/node_modules/web-tree-sitter');
-
+// Fix web-tree-sitter WASM file naming issue
+// aioncli-core expects tree-sitter.wasm but the package provides web-tree-sitter.wasm
+function fixTreeSitterWasm() {
   try {
-    // Check if target exists
-    if (!fs.existsSync(targetPath)) {
-      console.log('web-tree-sitter not found in aioncli-core, skipping symlink creation');
-      return;
-    }
+    const wasmDir = path.join(__dirname, '..', 'node_modules', 'web-tree-sitter');
+    const source = path.join(wasmDir, 'web-tree-sitter.wasm');
+    const target = path.join(wasmDir, 'tree-sitter.wasm');
 
-    // Remove existing symlink or directory if it exists
-    if (fs.existsSync(symlinkPath)) {
-      const stats = fs.lstatSync(symlinkPath);
-      if (stats.isSymbolicLink()) {
-        fs.unlinkSync(symlinkPath);
-      } else {
-        return;
-      }
+    if (fs.existsSync(source) && !fs.existsSync(target)) {
+      fs.symlinkSync('web-tree-sitter.wasm', target);
+      console.log('Created symlink: tree-sitter.wasm -> web-tree-sitter.wasm');
     }
-
-    // Create relative symlink (relative path is more portable)
-    fs.symlinkSync('@office-ai/aioncli-core/node_modules/web-tree-sitter', symlinkPath, 'junction');
   } catch (e) {
+    console.warn('Failed to create tree-sitter.wasm symlink:', e.message);
   }
 }
 
 function runPostInstall() {
   try {
-    // Create symlink for web-tree-sitter (needed for aioncli-core nested dependency)
-    createWebTreeSitterSymlink();
+    // Fix WASM file naming
+    fixTreeSitterWasm();
 
     // Check if we're in a CI environment
     const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';

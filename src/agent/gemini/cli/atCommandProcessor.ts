@@ -12,6 +12,36 @@ import * as path from 'path';
 import type { HistoryItem, IndividualToolCallDisplay } from './types';
 import { ToolCallStatus } from './types';
 
+// Truncation constants synced from aioncli-core/src/utils/fileUtils.ts
+const DEFAULT_MAX_LINES_TEXT_FILE = 2000;
+const MAX_LINE_LENGTH_TEXT_FILE = 2000;
+
+/**
+ * Truncates file content to prevent token overflow.
+ * Synced from aioncli-core/src/utils/fileUtils.ts
+ */
+function truncateFileContent(content: string): { content: string; truncated: boolean } {
+  const lines = content.split('\n');
+  let truncated = false;
+
+  const truncatedLines = lines.map((line) => {
+    if (line.length > MAX_LINE_LENGTH_TEXT_FILE) {
+      truncated = true;
+      return line.substring(0, MAX_LINE_LENGTH_TEXT_FILE) + '... [truncated]';
+    }
+    return line;
+  });
+
+  if (truncatedLines.length > DEFAULT_MAX_LINES_TEXT_FILE) {
+    truncated = true;
+    const result = truncatedLines.slice(0, DEFAULT_MAX_LINES_TEXT_FILE);
+    result.push(`\n... [${truncatedLines.length - DEFAULT_MAX_LINES_TEXT_FILE} more lines truncated]`);
+    return { content: result.join('\n'), truncated };
+  }
+
+  return { content: truncatedLines.join('\n'), truncated };
+}
+
 interface HandleAtCommandParams {
   query: string;
   config: Config;
@@ -19,6 +49,13 @@ interface HandleAtCommandParams {
   onDebugMessage: (message: string) => void;
   messageId: number;
   signal: AbortSignal;
+  /**
+   * 懒加载模式：不立即读取文件内容，只传递文件路径提示给 agent
+   * 让 agent 自主决定何时使用 read_file 工具读取文件
+   * Lazy loading mode: don't read file content immediately, only pass file path hints to agent
+   * Let agent decide when to use read_file tool to read files
+   */
+  lazyFileLoading?: boolean;
 }
 
 interface HandleAtCommandResult {
@@ -108,7 +145,7 @@ function parseAllAtCommands(query: string): AtCommandPart[] {
  * @returns An object indicating whether the main hook should proceed with an
  *          LLM call and the processed query parts (including file content).
  */
-export async function handleAtCommand({ query, config, addItem, onDebugMessage, messageId: userMessageTimestamp, signal }: HandleAtCommandParams): Promise<HandleAtCommandResult> {
+export async function handleAtCommand({ query, config, addItem, onDebugMessage, messageId: userMessageTimestamp, signal, lazyFileLoading = false }: HandleAtCommandParams): Promise<HandleAtCommandResult> {
   const commandParts = parseAllAtCommands(query);
   const atPathCommandParts = commandParts.filter((part) => part.type === 'atPath');
 
@@ -301,7 +338,6 @@ export async function handleAtCommand({ query, config, addItem, onDebugMessage, 
     }
 
     const message = `Ignored ${totalIgnored} files:\n${messages.join('\n')}`;
-    console.log(message);
     onDebugMessage(message);
   }
 
@@ -324,6 +360,31 @@ export async function handleAtCommand({ query, config, addItem, onDebugMessage, 
 
   const processedQueryParts: PartUnion[] = [{ text: initialQueryText }];
 
+  // 懒加载模式：不读取文件内容，只传递文件路径提示给 agent
+  // Lazy loading mode: don't read file content, only pass file path hints to agent
+  if (lazyFileLoading) {
+    const workspaceDirs = config.getWorkspaceContext().getDirectories();
+    const workspaceDir = workspaceDirs[0] || process.cwd();
+
+    processedQueryParts.push({
+      text: '\n\n[Files referenced in workspace - use read_file tool to access when needed]:',
+    });
+
+    for (const pathSpec of pathSpecsToRead) {
+      const absolutePath = path.resolve(workspaceDir, pathSpec);
+      processedQueryParts.push({
+        text: `\n- ${pathSpec} (path: ${absolutePath})`,
+      });
+      onDebugMessage(`File reference added (lazy mode): ${pathSpec}`);
+    }
+
+    processedQueryParts.push({
+      text: '\n\nNote: File contents are not loaded. Use read_file or read_many_files tool to read file content when you need it.',
+    });
+
+    return { processedQuery: processedQueryParts, shouldProceed: true };
+  }
+
   // Use fallback direct file reading if read_many_files tool is not available
   if (useFallbackFileReading) {
     try {
@@ -337,12 +398,14 @@ export async function handleAtCommand({ query, config, addItem, onDebugMessage, 
       for (const pathSpec of pathSpecsToRead) {
         try {
           const absolutePath = path.resolve(workspaceDir, pathSpec);
-          const fileContent = await fs.readFile(absolutePath, 'utf-8');
+          const rawContent = await fs.readFile(absolutePath, 'utf-8');
+          // Apply truncation to prevent token overflow
+          const { content: fileContent, truncated } = truncateFileContent(rawContent);
           processedQueryParts.push({
-            text: `\nContent from @${pathSpec}:\n`,
+            text: `\nContent from @${pathSpec}${truncated ? ' (truncated)' : ''}:\n`,
           });
           processedQueryParts.push({ text: fileContent });
-          onDebugMessage(`Successfully read file: ${pathSpec}`);
+          onDebugMessage(`Successfully read file: ${pathSpec}${truncated ? ' (content truncated to prevent token overflow)' : ''}`);
         } catch (readError) {
           onDebugMessage(`Failed to read file ${pathSpec}: ${getErrorMessage(readError)}`);
           // Continue with other files even if one fails

@@ -31,7 +31,7 @@ interface ThemeContextValue {
   setFontScale: (scale: number) => Promise<void>;
 }
 
-const ThemeContext = createContext<ThemeContextValue | null>(null);
+export const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 /**
  * Theme provider component 主题提供者组件

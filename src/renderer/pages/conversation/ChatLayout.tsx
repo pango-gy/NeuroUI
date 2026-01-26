@@ -1,7 +1,10 @@
 import { ConfigStorage } from '@/common/storage';
+import { STORAGE_KEYS } from '@/common/storageKeys';
 import FlexFullContainer from '@/renderer/components/FlexFullContainer';
 import { useLayoutContext } from '@/renderer/context/LayoutContext';
 import { useResizableSplit } from '@/renderer/hooks/useResizableSplit';
+import ConversationTabs from '@/renderer/pages/conversation/ConversationTabs';
+import { useConversationTabs } from '@/renderer/pages/conversation/context/ConversationTabsContext';
 import { PreviewPanel, usePreviewContext } from '@/renderer/pages/conversation/preview';
 import { Layout as ArcoLayout } from '@arco-design/web-react';
 import { ExpandLeft, ExpandRight, Robot } from '@icon-park/react';
@@ -33,7 +36,7 @@ const AGENT_LOGO_MAP: Partial<Record<AcpBackend, string>> = {
 };
 
 import { iconColors } from '@/renderer/theme/colors';
-import { WORKSPACE_TOGGLE_EVENT, dispatchWorkspaceStateEvent, dispatchWorkspaceToggleEvent } from '@/renderer/utils/workspaceEvents';
+import { WORKSPACE_HAS_FILES_EVENT, WORKSPACE_TOGGLE_EVENT, dispatchWorkspaceStateEvent, dispatchWorkspaceToggleEvent, type WorkspaceHasFilesDetail } from '@/renderer/utils/workspaceEvents';
 import { ACP_BACKENDS_ALL } from '@/types/acpTypes';
 import classNames from 'classnames';
 
@@ -80,6 +83,10 @@ const ChatLayout: React.FC<{
   siderTitle?: React.ReactNode;
   backend?: string;
   agentName?: string;
+  /** 自定义 agent logo（可以是 SVG 路径或 emoji 字符串）/ Custom agent logo (can be SVG path or emoji string) */
+  agentLogo?: string;
+  /** 是否为 emoji 类型的 logo / Whether the logo is an emoji */
+  agentLogoIsEmoji?: boolean;
   headerExtra?: React.ReactNode;
   headerLeft?: React.ReactNode;
   workspaceEnabled?: boolean;
@@ -88,7 +95,7 @@ const ChatLayout: React.FC<{
   const [rightSiderCollapsed, setRightSiderCollapsed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(() => (typeof window === 'undefined' ? 0 : window.innerWidth));
-  const { backend, agentName, workspaceEnabled = true } = props;
+  const { backend, agentName, agentLogo, agentLogoIsEmoji, workspaceEnabled = true } = props;
   const layout = useLayoutContext();
   const isMacRuntime = isMacEnvironment();
   // 右侧栏折叠状态引用 / Mirror ref for collapse state
@@ -96,6 +103,8 @@ const ChatLayout: React.FC<{
   const previousWorkspaceCollapsedRef = useRef<boolean | null>(null);
   const previousSiderCollapsedRef = useRef<boolean | null>(null);
   const previousPreviewOpenRef = useRef(false);
+  // 현재 대화 ID 참조 / Current conversation ID ref
+  const currentConversationIdRef = useRef<string | null>(null);
 
   // 预览面板状态 / Preview panel state
   const { isOpen: isPreviewOpen } = usePreviewContext();
@@ -106,6 +115,10 @@ const ChatLayout: React.FC<{
   // Compute display name with fallback chain (use first custom agent as fallback for backward compatibility)
   const displayName = agentName || (backend === 'custom' && customAgents?.[0]?.name) || ACP_BACKENDS_ALL[backend as keyof typeof ACP_BACKENDS_ALL]?.name || backend;
 
+  // 获取 tabs 状态，有 tabs 时隐藏会话标题
+  const { openTabs } = useConversationTabs();
+  const hasTabs = openTabs.length > 0;
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return undefined;
@@ -114,13 +127,74 @@ const ChatLayout: React.FC<{
       if (!workspaceEnabled) {
         return;
       }
-      setRightSiderCollapsed((prev) => !prev);
+      setRightSiderCollapsed((prev) => {
+        const newState = !prev;
+        // 记录用户手动操作偏好 / Record user manual operation preference
+        const conversationId = currentConversationIdRef.current;
+        if (conversationId) {
+          try {
+            localStorage.setItem(`workspace-preference-${conversationId}`, newState ? 'collapsed' : 'expanded');
+          } catch {
+            // 忽略错误
+          }
+        }
+        return newState;
+      });
     };
     window.addEventListener(WORKSPACE_TOGGLE_EVENT, handleWorkspaceToggle);
     return () => {
       window.removeEventListener(WORKSPACE_TOGGLE_EVENT, handleWorkspaceToggle);
     };
   }, [workspaceEnabled]);
+
+  // 根据文件状态自动展开/折叠工作空间面板（优先使用用户手动偏好）
+  // Auto expand/collapse workspace panel based on files state (user preference takes priority)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !workspaceEnabled) {
+      return undefined;
+    }
+    const handleHasFiles = (event: Event) => {
+      const detail = (event as CustomEvent<WorkspaceHasFilesDetail>).detail;
+      const conversationId = detail.conversationId;
+
+      // 更新当前会话 ID / Update current conversation ID
+      currentConversationIdRef.current = conversationId;
+
+      // 检查用户是否有手动设置的偏好 / Check if user has manual preference
+      let userPreference: 'expanded' | 'collapsed' | null = null;
+      if (conversationId) {
+        try {
+          const stored = localStorage.getItem(`workspace-preference-${conversationId}`);
+          if (stored === 'expanded' || stored === 'collapsed') {
+            userPreference = stored;
+          }
+        } catch {
+          // 忽略错误
+        }
+      }
+
+      // 如果有用户偏好，按偏好设置；否则按文件状态决定
+      // If user has preference, use it; otherwise decide by file state
+      if (userPreference) {
+        const shouldCollapse = userPreference === 'collapsed';
+        if (shouldCollapse !== rightSiderCollapsed) {
+          setRightSiderCollapsed(shouldCollapse);
+        }
+      } else {
+        // 无用户偏好：有文件展开，没文件折叠
+        // No user preference: expand if has files, collapse if not
+        if (detail.hasFiles && rightSiderCollapsed) {
+          setRightSiderCollapsed(false);
+        } else if (!detail.hasFiles && !rightSiderCollapsed) {
+          setRightSiderCollapsed(true);
+        }
+      }
+    };
+    window.addEventListener(WORKSPACE_HAS_FILES_EVENT, handleHasFiles);
+    return () => {
+      window.removeEventListener(WORKSPACE_HAS_FILES_EVENT, handleHasFiles);
+    };
+  }, [workspaceEnabled, rightSiderCollapsed]);
 
   useEffect(() => {
     if (!workspaceEnabled) {
@@ -151,6 +225,16 @@ const ChatLayout: React.FC<{
   }, []);
   useEffect(() => {
     rightCollapsedRef.current = rightSiderCollapsed;
+  }, [rightSiderCollapsed]);
+
+  // 持久化工作空间面板折叠状态
+  // Persist workspace panel collapse state
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.WORKSPACE_PANEL_COLLAPSE, String(rightSiderCollapsed));
+    } catch {
+      // 忽略错误
+    }
   }, [rightSiderCollapsed]);
 
   useEffect(() => {
@@ -257,7 +341,14 @@ const ChatLayout: React.FC<{
       : null;
 
   return (
-    <ArcoLayout className='size-full'>
+    <ArcoLayout
+      className='size-full color-black '
+      style={
+        {
+          // fontFamily: `cursive,"anthropicSans","anthropicSans Fallback",system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif`,
+        }
+      }
+    >
       {/* 主内容区域：会话面板 + 工作空间面板 + 预览面板 / Main content area: chat + workspace + preview */}
       <div ref={containerRef} className='flex flex-1 relative w-full overflow-hidden'>
         {/* 会话面板（带拖动句柄）/ Chat panel (with drag handle) */}
@@ -281,17 +372,19 @@ const ChatLayout: React.FC<{
               }
             }}
           >
-            <ArcoLayout.Header className={classNames('h-52px flex items-center justify-between p-16px gap-16px !bg-1 chat-layout-header')}>
+            {/* 会话 Tabs 栏 / Conversation tabs bar */}
+            <ConversationTabs />
+            <ArcoLayout.Header className={classNames('h-36px flex items-center justify-between p-16px gap-16px !bg-1 chat-layout-header')}>
               <div>{props.headerLeft}</div>
               <FlexFullContainer className='h-full' containerClassName='flex items-center gap-16px'>
-                <span className='font-bold text-16px text-t-primary inline-block overflow-hidden text-ellipsis whitespace-nowrap shrink-0 max-w-[50%]'>{props.title}</span>
+                {!hasTabs && <span className='font-bold text-16px text-t-primary inline-block overflow-hidden text-ellipsis whitespace-nowrap shrink-0 max-w-[50%]'>{props.title}</span>}
               </FlexFullContainer>
               <div className='flex items-center gap-12px'>
                 {/* headerExtra 会在右上角优先渲染，例如模型切换按钮 / headerExtra renders at top-right for items like model switchers */}
                 {props.headerExtra}
-                {backend && (
+                {(backend || agentLogo) && (
                   <div className='ml-16px flex items-center gap-2 bg-2 w-fit rounded-full px-[8px] py-[2px]'>
-                    {AGENT_LOGO_MAP[backend as AcpBackend] ? <img src={AGENT_LOGO_MAP[backend as AcpBackend]} alt={`${backend} logo`} width={16} height={16} style={{ objectFit: 'contain' }} /> : <Robot theme='outline' size={16} fill={iconColors.primary} />}
+                    {agentLogo ? agentLogoIsEmoji ? <span className='text-sm'>{agentLogo}</span> : <img src={agentLogo} alt={`${agentName || 'agent'} logo`} width={16} height={16} style={{ objectFit: 'contain' }} /> : AGENT_LOGO_MAP[backend as AcpBackend] ? <img src={AGENT_LOGO_MAP[backend as AcpBackend]} alt={`${backend} logo`} width={16} height={16} style={{ objectFit: 'contain' }} /> : <Robot theme='outline' size={16} fill={iconColors.primary} />}
                     <span className='text-sm'>{displayName}</span>
                   </div>
                 )}
@@ -312,7 +405,7 @@ const ChatLayout: React.FC<{
         {/* 预览面板（移到中间位置）/ Preview panel (moved to middle position) */}
         {isPreviewOpen && (
           <div
-            className='preview-panel flex flex-col relative my-[16px] mr-[16px] rounded-[15px]'
+            className='preview-panel flex flex-col relative my-[12px] mr-[12px] ml-[8px] rounded-[15px]'
             style={{
               // 使用 flexGrow: 1 填充剩余空间（会话和工作空间使用固定 flexBasis）
               flexGrow: layout?.isMobile ? 0 : 1,

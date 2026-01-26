@@ -5,7 +5,7 @@
  */
 
 import { execSync } from 'child_process';
-import type { AcpBackendAll } from '@/types/acpTypes';
+import type { AcpBackendAll, PresetAgentType } from '@/types/acpTypes';
 import { POTENTIAL_ACP_CLIS } from '@/types/acpTypes';
 import { ProcessConfig } from '@/process/initStorage';
 
@@ -15,6 +15,10 @@ interface DetectedAgent {
   cliPath?: string;
   acpArgs?: string[];
   customAgentId?: string; // UUID for custom agents
+  isPreset?: boolean;
+  context?: string;
+  avatar?: string;
+  presetAgentType?: PresetAgentType; // Primary agent type for presets
 }
 
 /**
@@ -33,8 +37,8 @@ class AcpDetector {
       const customAgents = await ProcessConfig.get('acp.customAgents');
       if (!customAgents || !Array.isArray(customAgents) || customAgents.length === 0) return;
 
-      // 过滤出已启用且有有效 CLI 路径的代理 / Filter enabled agents with valid CLI path
-      const enabledAgents = customAgents.filter((agent) => agent.enabled && agent.defaultCliPath);
+      // 过滤出已启用且有有效 CLI 路径或标记为预设的代理 / Filter enabled agents with valid CLI path or marked as preset
+      const enabledAgents = customAgents.filter((agent) => agent.enabled && (agent.defaultCliPath || agent.isPreset));
       if (enabledAgents.length === 0) return;
 
       // 将所有自定义代理追加到列表末尾 / Append all custom agents to the end
@@ -44,6 +48,10 @@ class AcpDetector {
         cliPath: agent.defaultCliPath,
         acpArgs: agent.acpArgs,
         customAgentId: agent.id, // 存储 UUID 用于标识 / Store the UUID for identification
+        isPreset: agent.isPreset,
+        context: agent.context,
+        avatar: agent.avatar,
+        presetAgentType: agent.presetAgentType, // 主 Agent 类型 / Primary agent type
       }));
 
       detected.push(...customDetectedAgents);

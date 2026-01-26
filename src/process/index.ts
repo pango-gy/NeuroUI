@@ -14,13 +14,8 @@ if (app.isPackaged) {
 }
 import initStorage from './initStorage';
 import './initBridge';
+import './i18n'; // Initialize i18n for main process
 
-app
-  .whenReady()
-  .then(async () => {
-    await initStorage();
-  })
-  .catch((error) => {
-    console.error('Failed to initialize application:', error);
-    process.exit(1);
-  });
+export const initializeProcess = async () => {
+  await initStorage();
+};

@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { initMainAdapterWithWindow } from './adapter/main';
 import { ipcBridge } from './common';
-import './process';
+import { initializeProcess } from './process';
 import { initializeAcpDetector } from './process/bridge';
 import { registerWindowMaximizeListeners } from './process/bridge/windowControlsBridge';
 import { applyZoomToWindow } from './process/utils/zoom';
@@ -253,6 +253,14 @@ ipcBridge.application.openDevTools.provider(() => {
 });
 
 const handleAppReady = async (): Promise<void> => {
+  try {
+    await initializeProcess();
+  } catch (error) {
+    console.error('Failed to initialize process:', error);
+    app.exit(1);
+    return;
+  }
+
   if (isResetPasswordMode) {
     // Handle password reset without creating window
     try {
