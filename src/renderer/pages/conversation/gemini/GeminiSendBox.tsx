@@ -168,7 +168,7 @@ const useGeminiMessage = (conversation_id: string) => {
     });
   }, [conversation_id]);
 
-  return { thought, setThought, running, tokenUsage };
+  return { thought, setThought, running, setRunning, tokenUsage };
 };
 
 const EMPTY_AT_PATH: Array<string | FileOrFolderItem> = [];
@@ -212,7 +212,7 @@ const GeminiSendBox: React.FC<{
   modelSelection: GeminiModelSelection;
 }> = ({ conversation_id, modelSelection }) => {
   const { t } = useTranslation();
-  const { thought, running, tokenUsage } = useGeminiMessage(conversation_id);
+  const { thought, running, setRunning, tokenUsage } = useGeminiMessage(conversation_id);
   const { workspace } = useConversationContext();
 
   const { atPath, uploadFile, setAtPath, setUploadFile, content, setContent } = useSendBoxDraft(conversation_id);
@@ -254,6 +254,10 @@ const GeminiSendBox: React.FC<{
     if (!currentModel?.useModel) return;
     const msg_id = uuid();
     message = processMessageWithFiles(message);
+
+    // 즉시 running 상태 설정 - 버튼 상태 혼란 방지
+    // Set running immediately to prevent button state confusion
+    setRunning(true);
 
     // 立即清空输入框，避免用户误以为消息没发送
     // Clear input immediately to avoid user thinking message wasn't sent

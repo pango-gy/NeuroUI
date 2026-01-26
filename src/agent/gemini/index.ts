@@ -17,8 +17,13 @@ import { loadCliConfig } from './cli/config';
 import type { Settings } from './cli/settings';
 import { loadSettings } from './cli/settings';
 import { ConversationToolConfig } from './cli/tools/conversation-tool-config';
+import { globalToolCallGuard } from './cli/streamResilience';
 import { mapToDisplay, type TrackedToolCall } from './cli/useReactToolScheduler';
 import { getPromptCount, handleCompletedTools, processGeminiStreamEvents, startNewPrompt } from './utils';
+
+// Auto-retry 설정 / Auto-retry configuration
+const MAX_INVALID_STREAM_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
 
 // Global registry for current agent instance (used by flashFallbackHandler)
 let currentGeminiAgent: GeminiAgent | null = null;
@@ -275,13 +280,30 @@ export class GeminiAgent {
     });
   }
 
-  private handleMessage(stream: AsyncGenerator<ServerGeminiStreamEvent, Turn, unknown>, msg_id: string, abortController: AbortController): Promise<{ usageMetadata?: unknown }> {
+  private handleMessage(stream: AsyncGenerator<ServerGeminiStreamEvent, Turn, unknown>, msg_id: string, abortController: AbortController, query?: unknown, retryCount: number = 0, prompt_id?: string): Promise<{ usageMetadata?: unknown }> {
     const toolCallRequests: ToolCallRequestInfo[] = [];
     let capturedUsageMetadata: unknown = undefined;
+    let invalidStreamDetected = false;
 
     return processGeminiStreamEvents(stream, this.config, (data) => {
       if (data.type === 'tool_call_request') {
-        toolCallRequests.push(data.data as ToolCallRequestInfo);
+        const toolRequest = data.data as ToolCallRequestInfo;
+        toolCallRequests.push(toolRequest);
+        // 도구 호출 보호 시작 / Protect tool call from cancellation
+        globalToolCallGuard.protect(toolRequest.callId);
+        return;
+      }
+      // invalid_stream 이벤트 감지 / Detect invalid_stream event
+      if (data.type === 'invalid_stream') {
+        invalidStreamDetected = true;
+        const streamData = data.data as { retryable?: boolean };
+        if (streamData?.retryable && retryCount < MAX_INVALID_STREAM_RETRIES) {
+          this.onStreamEvent({
+            type: 'error',
+            data: `잘못된 응답 스트림이 감지되었습니다. 재시도 중... (${retryCount + 1}/${MAX_INVALID_STREAM_RETRIES})`,
+            msg_id,
+          });
+        }
         return;
       }
       this.onStreamEvent({
@@ -290,6 +312,13 @@ export class GeminiAgent {
       });
     })
       .then(async (result) => {
+        // Auto-retry 로직 / Auto-retry logic for invalid stream
+        if (invalidStreamDetected && retryCount < MAX_INVALID_STREAM_RETRIES && query && !abortController.signal.aborted) {
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+          const newStream = this.geminiClient.sendMessageStream(query, abortController.signal, prompt_id);
+          return this.handleMessage(newStream, msg_id, abortController, query, retryCount + 1, prompt_id);
+        }
+
         // Capture usageMetadata from the processed stream
         capturedUsageMetadata = result.usageMetadata;
 
@@ -308,15 +337,35 @@ export class GeminiAgent {
         return { usageMetadata: capturedUsageMetadata };
       })
       .catch((e: unknown) => {
+        // 오류 발생 시 도구 호출 보호 해제 / Unprotect tool calls on error
+        for (const req of toolCallRequests) {
+          globalToolCallGuard.unprotect(req.callId);
+        }
         const errorMessage = e instanceof Error ? e.message : JSON.stringify(e);
+        const enrichedMessage = this.enrichErrorMessage(errorMessage);
         this.onStreamEvent({
           type: 'error',
-          data: errorMessage,
+          data: enrichedMessage,
           msg_id,
         });
         // Return empty usageMetadata on error to satisfy return type
         return { usageMetadata: undefined as unknown };
       });
+  }
+
+  /**
+   * 오류 메시지 강화 - 할당량 오류 감지 및 상세 정보 추가
+   * Enrich error message - detect quota errors and add details
+   */
+  private enrichErrorMessage(errorMessage: string): string {
+    const lowerMessage = errorMessage.toLowerCase();
+
+    // 할당량/용량 소진 오류 감지 / Detect quota/capacity exhaustion
+    if (lowerMessage.includes('model_capacity_exhausted') || lowerMessage.includes('resource_exhausted') || lowerMessage.includes('ratelimitexceeded') || lowerMessage.includes('quota')) {
+      return `${errorMessage}\n\n모델 할당량이 소진되었습니다. 잠시 후 다시 시도하거나 다른 모델을 사용해 주세요.`;
+    }
+
+    return errorMessage;
   }
 
   /**
@@ -387,7 +436,8 @@ export class GeminiAgent {
         data: '',
         msg_id,
       });
-      this.handleMessage(stream, msg_id, abortController)
+      // query, prompt_id 전달하여 auto-retry 지원 / Pass query and prompt_id for auto-retry support
+      this.handleMessage(stream, msg_id, abortController, query, 0, prompt_id)
         .then((result) => {
           this.onStreamEvent({
             type: 'finish',
@@ -422,6 +472,19 @@ export class GeminiAgent {
   async send(message: string | Array<{ text: string }>, msg_id = '') {
     await this.bootstrap;
     const abortController = this.createAbortController();
+
+    // OAuth 토큰 사전 검증 (Google 로그인 시)
+    // Pre-validate OAuth token for Google login
+    if (this.authType === AuthType.LOGIN_WITH_GOOGLE) {
+      try {
+        await this.config?.refreshAuth(this.authType);
+      } catch (tokenError) {
+        console.warn('[GeminiAgent] OAuth token refresh error:', tokenError);
+        // 토큰 오류 시에도 계속 진행 (서버에서 처리)
+        // Continue even on token error (let server handle it)
+      }
+    }
+
     // Prepend one-time history prefix before processing commands
     if (this.historyPrefix && !this.historyUsedOnce) {
       if (Array.isArray(message)) {

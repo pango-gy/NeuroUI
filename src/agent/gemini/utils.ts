@@ -54,6 +54,59 @@ export const processGeminiStreamEvents = async (stream: AsyncIterable<ServerGemi
           // console.log('event>>>>>>>>>>>>>>>>>>>', event);
         }
         break;
+      case ServerGeminiEventType.ContextWindowWillOverflow:
+        {
+          const overflowEvent = event as {
+            type: string;
+            value: { estimatedRequestTokenCount: number; remainingTokenCount: number };
+          };
+          const estimated = overflowEvent.value?.estimatedRequestTokenCount || 0;
+          const remaining = overflowEvent.value?.remainingTokenCount || 0;
+          const estimatedK = Math.round(estimated / 1000);
+          const remainingK = Math.round(remaining / 1000);
+
+          onStreamEvent({
+            type: ServerGeminiEventType.Error,
+            data: `컨텍스트 윈도우 초과: 요청 크기(${estimatedK}K 토큰)가 남은 용량(${remainingK}K 토큰)을 초과했습니다. 새 대화를 시작하거나 파일 크기를 줄여주세요.`,
+          });
+        }
+        break;
+      case ServerGeminiEventType.AgentExecutionStopped:
+        {
+          const reason = (event as { value?: { reason?: string } }).value?.reason;
+          onStreamEvent({
+            type: ServerGeminiEventType.Error,
+            data: `에이전트 실행이 중단되었습니다${reason ? `: ${reason}` : ''}.`,
+          });
+        }
+        break;
+      case ServerGeminiEventType.AgentExecutionBlocked:
+        {
+          const reason = (event as { value?: { reason?: string } }).value?.reason;
+          onStreamEvent({
+            type: ServerGeminiEventType.Error,
+            data: `에이전트 실행이 차단되었습니다${reason ? `: ${reason}` : ''}.`,
+          });
+        }
+        break;
+      case ServerGeminiEventType.Retry:
+        onStreamEvent({
+          type: ServerGeminiEventType.Error,
+          data: '일시적인 오류로 인해 요청을 재시도 중입니다. 잠시만 기다려주세요...',
+        });
+        break;
+      case ServerGeminiEventType.InvalidStream:
+        onStreamEvent({
+          type: 'invalid_stream' as ServerGeminiEventType,
+          data: {
+            message: '잘못된 응답 스트림이 감지되었습니다. 재시도 중...',
+            retryable: true,
+          },
+        });
+        break;
+      case ServerGeminiEventType.ModelInfo:
+        // 모델 정보 - 조용히 처리
+        break;
       default: {
         // Some event types may not be handled yet
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
