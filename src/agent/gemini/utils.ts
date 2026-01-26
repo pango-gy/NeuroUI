@@ -10,7 +10,7 @@ import { parseAndFormatApiError } from './cli/errorParsing';
 import { MIME_TO_EXT_MAP, DEFAULT_IMAGE_EXTENSION } from '@/common/constants';
 import * as fs from 'fs';
 import * as path from 'path';
-import { StreamMonitor, globalToolCallGuard, type StreamConnectionEvent, type StreamResilienceConfig, DEFAULT_STREAM_RESILIENCE_CONFIG } from './cli/streamResilience';
+import { globalToolCallGuard } from './cli/streamResilience';
 
 enum StreamProcessingStatus {
   Completed,
@@ -18,12 +18,6 @@ enum StreamProcessingStatus {
   Error,
   HeartbeatTimeout,
   ConnectionLost,
-}
-
-// 流监控配置
-export interface StreamMonitorOptions {
-  config?: Partial<StreamResilienceConfig>;
-  onConnectionEvent?: (event: StreamConnectionEvent) => void;
 }
 
 /**
@@ -56,43 +50,22 @@ async function saveInlineImage(mimeType: string, base64Data: string, workingDir:
 }
 
 /**
- * 处理 Gemini 流式事件（带弹性监控）
- * Process Gemini stream events with resilience monitoring
+ * 处理 Gemini 流式事件
+ * Process Gemini stream events
  *
  * @param stream - 原始流
  * @param config - 配置对象
  * @param onStreamEvent - 事件回调
- * @param monitorOptions - 流监控选项（可选）
  */
-export const processGeminiStreamEvents = async (stream: AsyncIterable<ServerGeminiStreamEvent>, config: Config, onStreamEvent: (event: { type: ServerGeminiStreamEvent['type']; data: unknown }) => void, monitorOptions?: StreamMonitorOptions): Promise<{ status: StreamProcessingStatus; usageMetadata?: unknown }> => {
+export const processGeminiStreamEvents = async (stream: AsyncIterable<ServerGeminiStreamEvent>, config: Config, onStreamEvent: (event: { type: ServerGeminiStreamEvent['type']; data: unknown }) => void): Promise<{ status: StreamProcessingStatus; usageMetadata?: unknown }> => {
   let capturedUsageMetadata: unknown = undefined;
 
-  // 创建流监控器
-  const monitorConfig = { ...DEFAULT_STREAM_RESILIENCE_CONFIG, ...monitorOptions?.config };
-  const monitor = new StreamMonitor(monitorConfig, (event) => {
-    // 处理连接状态变化
-    if (event.type === 'state_change') {
-      console.debug(`[StreamMonitor] State changed to: ${event.state}`, event.reason || '');
-    } else if (event.type === 'heartbeat_timeout') {
-      console.warn(`[StreamMonitor] Heartbeat timeout detected, last event: ${event.lastEventTime}`);
-    }
-    // 传递给外部监听器
-    monitorOptions?.onConnectionEvent?.(event);
-  });
-
-  monitor.start();
+  // 禁用流监控 - 它会导致不必要的连接状态跟踪和重试问题
+  // Disabled stream monitoring - it causes unnecessary connection state tracking and retry issues
+  // const monitor = new StreamMonitor(...);
 
   try {
     for await (const event of stream) {
-      // 记录收到事件，更新心跳时间
-      monitor.recordEvent();
-
-      // 检查是否心跳超时（长时间无数据）
-      if (monitor.isHeartbeatTimeout()) {
-        console.warn('[StreamMonitor] Stream heartbeat timeout, connection may be stale');
-        // 不立即中断，让上层处理决定
-      }
-
       switch (event.type) {
         case ServerGeminiEventType.Thought:
           onStreamEvent({ type: event.type, data: (event as unknown as { value: unknown }).value });
@@ -257,24 +230,19 @@ export const processGeminiStreamEvents = async (stream: AsyncIterable<ServerGemi
     }
 
     // 流正常结束
-    monitor.stop();
     return { status: StreamProcessingStatus.Completed, usageMetadata: capturedUsageMetadata };
   } catch (error) {
     // 流处理出错
     const errorMessage = error instanceof Error ? error.message : String(error);
-    monitor.markFailed(errorMessage);
 
     // 检查是否是连接相关错误
     if (errorMessage.includes('fetch failed') || errorMessage.includes('network') || errorMessage.includes('timeout') || errorMessage.includes('ECONNRESET') || errorMessage.includes('socket hang up')) {
-      console.error('[StreamMonitor] Connection error detected:', errorMessage);
+      console.error('[GeminiStream] Connection error detected:', errorMessage);
       return { status: StreamProcessingStatus.ConnectionLost, usageMetadata: capturedUsageMetadata };
     }
 
     // 重新抛出其他错误
     throw error;
-  } finally {
-    // 确保监控器停止
-    monitor.stop();
   }
 };
 

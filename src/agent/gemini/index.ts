@@ -20,7 +20,7 @@ import { loadSettings } from './cli/settings';
 import { ConversationToolConfig } from './cli/tools/conversation-tool-config';
 import { mapToDisplay, type TrackedToolCall } from './cli/useReactToolScheduler';
 import { getPromptCount, handleCompletedTools, processGeminiStreamEvents, startNewPrompt } from './utils';
-import { globalToolCallGuard, type StreamConnectionEvent } from './cli/streamResilience';
+import { globalToolCallGuard } from './cli/streamResilience';
 import { getGlobalTokenManager } from './cli/oauthTokenManager';
 import fs from 'fs';
 
@@ -379,114 +379,44 @@ export class GeminiAgent {
   }
 
   /**
-   * 处理消息流（带弹性监控和自动重试）
-   * Handle message stream with resilience monitoring and automatic retry
+   * 处理消息流
+   * Handle message stream
    *
-   * @param query - 原始查询（用于重试）/ Original query (for retry)
    * @param stream - 消息流 / Message stream
    * @param msg_id - 消息 ID / Message ID
    * @param abortController - 中止控制器 / Abort controller
-   * @param retryCount - 当前重试次数 / Current retry count
    */
-  private handleMessage(stream: AsyncGenerator<ServerGeminiStreamEvent, Turn, unknown>, msg_id: string, abortController: AbortController, query?: unknown, retryCount: number = 0): Promise<{ usageMetadata?: unknown }> {
-    const MAX_INVALID_STREAM_RETRIES = 2; // 最多重试 2 次 / Max 2 retries
-    const RETRY_DELAY_MS = 1000; // 重试延迟 1 秒 / 1 second retry delay
+  private handleMessage(stream: AsyncGenerator<ServerGeminiStreamEvent, Turn, unknown>, msg_id: string, abortController: AbortController): Promise<{ usageMetadata?: unknown }> {
     let capturedUsageMetadata: unknown = undefined;
 
     const toolCallRequests: ToolCallRequestInfo[] = [];
-    let heartbeatWarned = false;
-    let invalidStreamDetected = false;
 
-    // 流连接事件处理
-    // Stream connection event handler
-    const onConnectionEvent = (event: StreamConnectionEvent) => {
-      if (event.type === 'heartbeat_timeout') {
-        console.warn(`[GeminiAgent] Stream heartbeat timeout at ${new Date(event.lastEventTime).toISOString()}`);
-        if (!heartbeatWarned) {
-          heartbeatWarned = true;
-        }
-      } else if (event.type === 'state_change' && event.state === 'failed') {
-        console.error(`[GeminiAgent] Stream connection failed: ${event.reason}`);
-        this.onStreamEvent({
-          type: 'error',
-          data: `Connection lost: ${event.reason}. Please try again.`,
-          msg_id,
-        });
+    return processGeminiStreamEvents(stream, this.config, (data) => {
+      if (data.type === 'tool_call_request') {
+        const toolRequest = data.data as ToolCallRequestInfo;
+        toolCallRequests.push(toolRequest);
+        // 立即保护工具调用，防止被取消
+        // Immediately protect tool call to prevent cancellation
+        globalToolCallGuard.protect(toolRequest.callId);
+        return;
       }
-    };
 
-    return processGeminiStreamEvents(
-      stream,
-      this.config,
-      (data) => {
-        if (data.type === 'tool_call_request') {
-          const toolRequest = data.data as ToolCallRequestInfo;
-          toolCallRequests.push(toolRequest);
-          // 立即保护工具调用，防止被取消
-          // Immediately protect tool call to prevent cancellation
-          globalToolCallGuard.protect(toolRequest.callId);
-          return;
-        }
+      // 检测 invalid_stream 事件 - 仅记录日志，不触发重试
+      // Detect invalid_stream event - log only, do not trigger retry
+      // 禁用重试逻辑，因为它会导致连接问题 / Disabled retry logic as it causes connection issues
+      if (data.type === ('invalid_stream' as string)) {
+        console.debug('[GeminiAgent] invalid_stream event received (ignored)');
+        return;
+      }
 
-        // 检测 invalid_stream 事件
-        // Detect invalid_stream event
-        if (data.type === ('invalid_stream' as string)) {
-          invalidStreamDetected = true;
-          const eventData = data.data as { message: string; retryable: boolean };
-          if (eventData.retryable && retryCount < MAX_INVALID_STREAM_RETRIES && query && !abortController.signal.aborted) {
-            console.warn(`[GeminiAgent] Invalid stream detected, will retry (attempt ${retryCount + 1}/${MAX_INVALID_STREAM_RETRIES})`);
-            // 向用户显示重试提示
-            // Show retry hint to user
-            this.onStreamEvent({
-              type: 'info',
-              data: `Stream interrupted, retrying... (${retryCount + 1}/${MAX_INVALID_STREAM_RETRIES})`,
-              msg_id,
-            });
-          }
-          return;
-        }
-
-        this.onStreamEvent({
-          ...data,
-          msg_id,
-        });
-      },
-      { onConnectionEvent }
-    )
+      this.onStreamEvent({
+        ...data,
+        msg_id,
+      });
+    })
       .then(async (result) => {
         // Capture usageMetadata from the processed stream
         capturedUsageMetadata = result.usageMetadata;
-
-        // 如果检测到 invalid_stream 且可以重试，执行重试
-        // If invalid_stream detected and can retry, perform retry
-        if (invalidStreamDetected && retryCount < MAX_INVALID_STREAM_RETRIES && query && !abortController.signal.aborted) {
-          console.log(`[GeminiAgent] Retrying after invalid stream (attempt ${retryCount + 1})`);
-
-          // 延迟后重试
-          // Delay before retry
-          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-
-          if (abortController.signal.aborted) {
-            return { usageMetadata: capturedUsageMetadata };
-          }
-
-          // 重新发送消息
-          // Re-send message
-          const prompt_id = this.config.getSessionId() + '########' + getPromptCount();
-          const newStream = this.geminiClient.sendMessageStream(query, abortController.signal, prompt_id);
-          return this.handleMessage(newStream, msg_id, abortController, query, retryCount + 1);
-        }
-
-        // 如果检测到 invalid_stream 但无法重试，显示最终错误
-        // If invalid_stream detected but can't retry, show final error
-        if (invalidStreamDetected && retryCount >= MAX_INVALID_STREAM_RETRIES) {
-          this.onStreamEvent({
-            type: 'error',
-            data: 'Invalid response stream detected after multiple retries. Please try again.',
-            msg_id,
-          });
-          return { usageMetadata: capturedUsageMetadata };
-        }
 
         if (toolCallRequests.length > 0) {
           // Emit preview_open for navigation tools, but don't block execution
@@ -592,7 +522,7 @@ export class GeminiAgent {
       });
       // Pass query to handleMessage for potential retry on invalid stream
       // 将 query 传递给 handleMessage 以便在 invalid stream 时重试
-      this.handleMessage(stream, msg_id, abortController, query)
+      this.handleMessage(stream, msg_id, abortController)
         .then((result) => {
           this.onStreamEvent({
             type: 'finish',
