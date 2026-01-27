@@ -734,5 +734,37 @@
       "error": "連線錯誤",
       "unknown": "未知狀態"
     }
+  },
+  "gems": {
+    "title": "Gems",
+    "select": "選擇Gem",
+    "selected": "已選擇",
+    "create": "新建",
+    "createTitle": "建立新Gem",
+    "createSuccess": "Gem建立成功",
+    "createFailed": "Gem建立失敗",
+    "edit": "編輯Gem",
+    "detail": "Gem詳情",
+    "empty": "尚無Gem",
+    "clearSelection": "取消選擇",
+    "deleteConfirm": {
+      "title": "刪除Gem",
+      "message": "確定要刪除'{{name}}'嗎？"
+    },
+    "validation": {
+      "required": "名稱和系統提示詞為必填項"
+    },
+    "form": {
+      "icon": "圖示",
+      "iconPlaceholder": "輸入表情符號",
+      "iconHint": "輸入一個表情符號（例如：🤖、💼、📊）",
+      "name": "名稱",
+      "namePlaceholder": "輸入Gem名稱",
+      "description": "描述",
+      "descriptionPlaceholder": "輸入簡短描述（選填）",
+      "systemPrompt": "系統提示詞",
+      "systemPromptPlaceholder": "輸入AI的角色和指令...",
+      "systemPromptHint": "此提示詞將在對話開始時傳送給AI"
+    }
   }
 }

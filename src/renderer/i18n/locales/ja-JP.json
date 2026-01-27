@@ -763,5 +763,37 @@
       "error": "接続エラー",
       "unknown": "不明な状態"
     }
+  },
+  "gems": {
+    "title": "Gems",
+    "select": "Gemを選択",
+    "selected": "選択中",
+    "create": "新規作成",
+    "createTitle": "新しいGemを作成",
+    "createSuccess": "Gemが作成されました",
+    "createFailed": "Gemの作成に失敗しました",
+    "edit": "Gemを編集",
+    "detail": "Gem詳細",
+    "empty": "Gemがありません",
+    "clearSelection": "選択を解除",
+    "deleteConfirm": {
+      "title": "Gemを削除",
+      "message": "'{{name}}'を削除してもよろしいですか？"
+    },
+    "validation": {
+      "required": "名前とシステムプロンプトは必須です"
+    },
+    "form": {
+      "icon": "アイコン",
+      "iconPlaceholder": "絵文字を入力",
+      "iconHint": "絵文字を1つ入力してください（例：🤖、💼、📊）",
+      "name": "名前",
+      "namePlaceholder": "Gem名を入力",
+      "description": "説明",
+      "descriptionPlaceholder": "簡単な説明を入力（任意）",
+      "systemPrompt": "システムプロンプト",
+      "systemPromptPlaceholder": "AIの役割と指示を入力...",
+      "systemPromptHint": "このプロンプトは会話開始時にAIに送信されます"
+    }
   }
 }

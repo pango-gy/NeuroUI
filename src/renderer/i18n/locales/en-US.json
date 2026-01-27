@@ -783,5 +783,37 @@
       "proDesc": "For complex tasks that require deep reasoning and creativity",
       "flashDesc": "For tasks that need a balance of speed and reasoning"
     }
+  },
+  "gems": {
+    "title": "Gems",
+    "select": "Select Gem",
+    "selected": "Selected",
+    "create": "Create New",
+    "createTitle": "Create New Gem",
+    "createSuccess": "Gem created successfully",
+    "createFailed": "Failed to create Gem",
+    "edit": "Edit Gem",
+    "detail": "Gem Details",
+    "empty": "No Gems yet",
+    "clearSelection": "Clear Selection",
+    "deleteConfirm": {
+      "title": "Delete Gem",
+      "message": "Are you sure you want to delete '{{name}}'?"
+    },
+    "validation": {
+      "required": "Name and system prompt are required"
+    },
+    "form": {
+      "icon": "Icon",
+      "iconPlaceholder": "Enter emoji",
+      "iconHint": "Enter a single emoji (e.g., 🤖, 💼, 📊)",
+      "name": "Name",
+      "namePlaceholder": "Enter Gem name",
+      "description": "Description",
+      "descriptionPlaceholder": "Enter a brief description (optional)",
+      "systemPrompt": "System Prompt",
+      "systemPromptPlaceholder": "Enter the AI's role and instructions...",
+      "systemPromptHint": "This prompt will be sent to the AI at the start of the conversation"
+    }
   }
 }

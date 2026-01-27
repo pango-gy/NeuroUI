@@ -12,6 +12,7 @@ import { initCodexConversationBridge } from './codexConversationBridge';
 import { initConversationBridge } from './conversationBridge';
 import { initDocumentBridge } from './documentBridge';
 import { initDatabaseBridge } from './databaseBridge';
+import { initGemsBridge } from './gemsBridge';
 import { initDialogBridge } from './dialogBridge';
 import { initFileWatchBridge } from './fileWatchBridge';
 import { initFsBridge } from './fsBridge';
@@ -45,6 +46,7 @@ export function initAllBridges(): void {
   initPreviewHistoryBridge();
   initDocumentBridge();
   initWindowControlsBridge();
+  initGemsBridge();
 }
 
 /**
@@ -59,6 +61,6 @@ export async function initializeAcpDetector(): Promise<void> {
 }
 
 // 导出初始化函数供单独使用
-export { initAcpConversationBridge, initApplicationBridge, initAuthBridge, initCodexConversationBridge, initConversationBridge, initDatabaseBridge, initDialogBridge, initDocumentBridge, initFsBridge, initGeminiBridge, initGeminiConversationBridge, initMcpBridge, initModelBridge, initPreviewHistoryBridge, initShellBridge, initWindowControlsBridge };
+export { initAcpConversationBridge, initApplicationBridge, initAuthBridge, initCodexConversationBridge, initConversationBridge, initDatabaseBridge, initDialogBridge, initDocumentBridge, initFsBridge, initGeminiBridge, initGeminiConversationBridge, initGemsBridge, initMcpBridge, initModelBridge, initPreviewHistoryBridge, initShellBridge, initWindowControlsBridge };
 // 导出窗口控制相关工具函数
 export { registerWindowMaximizeListeners } from './windowControlsBridge';

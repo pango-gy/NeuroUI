@@ -169,6 +169,8 @@ const AGENT_LOGO_MAP: Partial<Record<AcpBackend, string>> = {
 };
 
 import { ConnectedMcpIcons } from '@/renderer/components/ConnectedMcpIcons';
+import { GemButton, GemPopover } from '@/renderer/components/Gem';
+import type { IGem } from '@/common/types/gems';
 
 const Guid: React.FC = () => {
   const { t } = useTranslation();
@@ -233,6 +235,10 @@ const Guid: React.FC = () => {
   const [isPlusDropdownOpen, setIsPlusDropdownOpen] = useState(false);
   const [typewriterPlaceholder, setTypewriterPlaceholder] = useState('');
   const [isTyping, setIsTyping] = useState(true);
+
+  // Gem 상태 / Gem state
+  const [selectedGem, setSelectedGem] = useState<IGem | null>(null);
+  const [gemPopoverVisible, setGemPopoverVisible] = useState(false);
 
   /**
    * 生成唯一模型 key（providerId:model）
@@ -377,6 +383,9 @@ const Guid: React.FC = () => {
             defaultFiles: files,
             workspace: dir,
             webSearchEngine: isGoogleAuth ? 'google' : 'default',
+            selectedGemId: selectedGem?.id,
+            selectedGemName: selectedGem?.name,
+            selectedGemSystemPrompt: selectedGem?.systemPrompt,
           },
         });
 
@@ -703,6 +712,13 @@ const Guid: React.FC = () => {
                     )}
                   </span>
                 </Dropdown>
+
+                {/* Gem 버튼 / Gem Button */}
+                {(!selectedAgent || selectedAgent === 'gemini') && (
+                  <GemPopover visible={gemPopoverVisible} onVisibleChange={setGemPopoverVisible} selectedGem={selectedGem} onSelectGem={setSelectedGem}>
+                    <GemButton selectedGem={selectedGem} />
+                  </GemPopover>
+                )}
 
                 {/* {selectedAgent === 'gemini' && (
                   <Dropdown

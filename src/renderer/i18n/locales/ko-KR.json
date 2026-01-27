@@ -770,5 +770,37 @@
       "modify": "수정",
       "delete": "삭제"
     }
+  },
+  "gems": {
+    "title": "Gems",
+    "select": "Gem 선택",
+    "selected": "선택됨",
+    "create": "새로 만들기",
+    "createTitle": "새 Gem 만들기",
+    "createSuccess": "Gem이 생성되었습니다",
+    "createFailed": "Gem 생성에 실패했습니다",
+    "edit": "Gem 편집",
+    "detail": "Gem 상세",
+    "empty": "아직 Gem이 없습니다",
+    "clearSelection": "선택 해제",
+    "deleteConfirm": {
+      "title": "Gem 삭제",
+      "message": "'{{name}}'을(를) 삭제하시겠습니까?"
+    },
+    "validation": {
+      "required": "이름과 시스템 프롬프트는 필수입니다"
+    },
+    "form": {
+      "icon": "아이콘",
+      "iconPlaceholder": "이모지 입력",
+      "iconHint": "이모지 하나를 입력하세요 (예: 🤖, 💼, 📊)",
+      "name": "이름",
+      "namePlaceholder": "Gem 이름을 입력하세요",
+      "description": "설명",
+      "descriptionPlaceholder": "간단한 설명을 입력하세요 (선택사항)",
+      "systemPrompt": "시스템 프롬프트",
+      "systemPromptPlaceholder": "AI의 역할과 지시사항을 입력하세요...",
+      "systemPromptHint": "이 프롬프트는 대화 시작 시 AI에게 전달됩니다"
+    }
   }
 }

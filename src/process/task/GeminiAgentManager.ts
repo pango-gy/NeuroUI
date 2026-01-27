@@ -51,6 +51,7 @@ export class GeminiAgentManager extends BaseAgentManager<{
       workspace: string;
       conversation_id: string;
       webSearchEngine?: 'google' | 'default';
+      gemSystemPrompt?: string;
     },
     model: TProviderWithModel
   ) {
@@ -58,6 +59,7 @@ export class GeminiAgentManager extends BaseAgentManager<{
     this.workspace = data.workspace;
     this.conversation_id = data.conversation_id;
     this.model = model;
+    const gemSystemPrompt = data.gemSystemPrompt;
     this.bootstrap = Promise.all([ProcessConfig.get('gemini.config'), this.getImageGenerationModel(), this.getMcpServers()])
       .then(([config, imageGenerationModel, mcpServers]) => {
         const safeConfig: Partial<IConfigStorageRefer['gemini.config']> = config || {};
@@ -74,6 +76,13 @@ export class GeminiAgentManager extends BaseAgentManager<{
       })
       .then(async () => {
         await this.injectHistoryFromDatabase();
+        // Gem 시스템 프롬프트 주입 (비동기, 블로킹하지 않음)
+        // Inject Gem system prompt (async, non-blocking)
+        if (gemSystemPrompt) {
+          this.postMessagePromise('inject.gem', { systemPrompt: gemSystemPrompt }).catch(() => {
+            // ignore gem injection errors
+          });
+        }
       });
   }
 
@@ -284,5 +293,17 @@ export class GeminiAgentManager extends BaseAgentManager<{
   // Manually trigger context reload
   async reloadContext(): Promise<void> {
     await this.injectHistoryFromDatabase();
+  }
+
+  // Gem 시스템 프롬프트 주입 / Inject Gem system prompt
+  async injectGemPrompt(systemPrompt: string): Promise<void> {
+    await this.bootstrap;
+    await this.postMessagePromise('inject.gem', { systemPrompt });
+  }
+
+  // Gem 시스템 프롬프트 해제 / Clear Gem system prompt
+  async clearGemPrompt(): Promise<void> {
+    await this.bootstrap;
+    await this.postMessagePromise('clear.gem', {});
   }
 }

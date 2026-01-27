@@ -770,5 +770,37 @@
       "proDesc": "适合需要复杂推理和创造力的任务。",
       "flashDesc": "适合同时兼顾速度与推理的任务。"
     }
+  },
+  "gems": {
+    "title": "Gems",
+    "select": "选择Gem",
+    "selected": "已选择",
+    "create": "新建",
+    "createTitle": "创建新Gem",
+    "createSuccess": "Gem创建成功",
+    "createFailed": "Gem创建失败",
+    "edit": "编辑Gem",
+    "detail": "Gem详情",
+    "empty": "暂无Gem",
+    "clearSelection": "取消选择",
+    "deleteConfirm": {
+      "title": "删除Gem",
+      "message": "确定要删除'{{name}}'吗？"
+    },
+    "validation": {
+      "required": "名称和系统提示词为必填项"
+    },
+    "form": {
+      "icon": "图标",
+      "iconPlaceholder": "输入表情符号",
+      "iconHint": "输入一个表情符号（例如：🤖、💼、📊）",
+      "name": "名称",
+      "namePlaceholder": "输入Gem名称",
+      "description": "描述",
+      "descriptionPlaceholder": "输入简短描述（可选）",
+      "systemPrompt": "系统提示词",
+      "systemPromptPlaceholder": "输入AI的角色和指令...",
+      "systemPromptHint": "此提示词将在对话开始时发送给AI"
+    }
   }
 }

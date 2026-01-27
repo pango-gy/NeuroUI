@@ -44,5 +44,15 @@ export default forkTask(({ data }, pipe) => {
     deferred.with(agent.send(event.input, event.msg_id));
   });
 
+  // Gem 시스템 프롬프트 주입 핸들러 / Gem system prompt injection handler
+  pipe.on('inject.gem', (event: { systemPrompt: string }, deferred) => {
+    deferred.with(agent.setGemSystemPrompt(event.systemPrompt));
+  });
+
+  // Gem 시스템 프롬프트 해제 핸들러 / Gem system prompt clear handler
+  pipe.on('clear.gem', (_event: Record<string, never>, deferred) => {
+    deferred.with(agent.clearGemSystemPrompt());
+  });
+
   return agent.bootstrap;
 });

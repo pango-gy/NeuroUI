@@ -61,6 +61,7 @@ export class GeminiAgent {
   private settings: Settings | null = null;
   private historyPrefix: string | null = null;
   private historyUsedOnce = false;
+  private gemSystemPrompt: string | null = null; // Gem 시스템 프롬프트
   bootstrap: Promise<void>;
   static buildFileServer(workspace: string) {
     return new FileDiscoveryService(workspace);
@@ -565,6 +566,36 @@ export class GeminiAgent {
     } catch (e) {
       // ignore injection errors
     }
+  }
+
+  /**
+   * Gem 시스템 프롬프트 설정 / Set Gem system prompt
+   * @param prompt - 시스템 프롬프트 내용
+   */
+  setGemSystemPrompt(prompt: string): void {
+    this.gemSystemPrompt = prompt;
+    this.applyGemPromptToMemory();
+  }
+
+  /**
+   * Gem 시스템 프롬프트 해제 / Clear Gem system prompt
+   */
+  clearGemSystemPrompt(): void {
+    this.gemSystemPrompt = null;
+    this.applyGemPromptToMemory();
+  }
+
+  /**
+   * Gem 프롬프트를 현재 메모리에 적용 (서버 요청 없이)
+   * Apply Gem prompt to current memory (without server request)
+   */
+  private applyGemPromptToMemory(): void {
+    if (!this.config) return;
+    const currentMemory = this.config.userMemory || '';
+    // 기존 [System Instruction] 블록 제거
+    const cleanedMemory = currentMemory.replace(/\[System Instruction\][\s\S]*?\n\n/g, '');
+    const combined = this.gemSystemPrompt ? `[System Instruction]\n${this.gemSystemPrompt}\n\n${cleanedMemory}` : cleanedMemory;
+    this.config.setUserMemory(combined);
   }
 }
 

@@ -1,18 +1,21 @@
 import { ipcBridge } from '@/common';
 import { transformMessage } from '@/common/chatLib';
+import type { IGem } from '@/common/types/gems';
 import type { TChatConversation, TokenUsageData } from '@/common/storage';
 import { uuid } from '@/common/utils';
 import ContextUsageIndicator from '@/renderer/components/ContextUsageIndicator';
 import FilePreview from '@/renderer/components/FilePreview';
+import { GemButton, GemPopover } from '@/renderer/components/Gem';
 import HorizontalFileList from '@/renderer/components/HorizontalFileList';
 import ThoughtDisplay, { type ThoughtData } from '@/renderer/components/ThoughtDisplay';
 import SendBox from '@/renderer/components/sendbox';
 import { useAuth } from '@/renderer/context/AuthContext';
 import { useConversationContext } from '@/renderer/context/ConversationContext';
+import { useGems } from '@/renderer/hooks/useGems';
 import { useLatestRef } from '@/renderer/hooks/useLatestRef';
 import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/useSendBoxDraft';
 import { createSetUploadFile, useSendBoxFiles } from '@/renderer/hooks/useSendBoxFiles';
-import { useAddOrUpdateMessage } from '@/renderer/messages/hooks';
+import { useAddOrUpdateMessage, useMessageList } from '@/renderer/messages/hooks';
 import { usePreviewContext } from '@/renderer/pages/conversation/preview';
 import { allSupportedExts } from '@/renderer/services/FileService';
 import { ModelProvisioningService } from '@/renderer/services/ModelProvisioningService';
@@ -220,6 +223,64 @@ const GeminiSendBox: React.FC<{
   const addOrUpdateMessage = useAddOrUpdateMessage();
   const { setSendBoxHandler } = usePreviewContext();
 
+  // Gem 관련 상태 / Gem related state
+  const { getGemById } = useGems();
+  const [selectedGem, setSelectedGem] = useState<IGem | null>(null);
+  const [savedGemName, setSavedGemName] = useState<string | null>(null); // conversation extra에서 로드한 Gem 이름
+  const [gemPopoverVisible, setGemPopoverVisible] = useState(false);
+  const messages = useMessageList();
+  const chatStarted = messages.length > 0;
+
+  // 대화 시작 시 저장된 Gem 정보 로드
+  // Load saved gem info when conversation starts
+  useEffect(() => {
+    void ipcBridge.conversation.get.invoke({ id: conversation_id }).then((res) => {
+      console.log('[GeminiSendBox] Conversation loaded:', res?.type, 'extra:', res?.extra);
+      if (!res || res.type !== 'gemini') return;
+      const extra = res.extra;
+      console.log('[GeminiSendBox] selectedGemId:', extra?.selectedGemId, 'selectedGemName:', extra?.selectedGemName);
+      if (extra?.selectedGemId) {
+        // 저장된 Gem 이름 표시용 / For display purposes
+        setSavedGemName(extra.selectedGemName || null);
+        // Gem 객체도 로드 시도 / Try to load gem object
+        const gem = getGemById(extra.selectedGemId);
+        if (gem) {
+          setSelectedGem(gem);
+        }
+      }
+    });
+  }, [conversation_id, getGemById]);
+
+  // Gem 선택 처리 / Handle gem selection
+  const handleGemSelect = useCallback(
+    (gem: IGem | null) => {
+      setSelectedGem(gem);
+      // 대화 extra에 gem 정보 저장 / Save gem info to conversation extra
+      void ipcBridge.conversation.update.invoke({
+        id: conversation_id,
+        updates: {
+          extra: {
+            selectedGemId: gem?.id,
+            selectedGemName: gem?.name,
+          } as TChatConversation['extra'],
+        },
+        mergeExtra: true,
+      });
+      // 채팅이 시작되지 않았으면 Gem 주입/해제
+      if (!chatStarted) {
+        if (gem) {
+          void ipcBridge.gems.injectGem.invoke({
+            conversation_id,
+            systemPrompt: gem.systemPrompt,
+          });
+        } else {
+          void ipcBridge.gems.clearGem.invoke({ conversation_id });
+        }
+      }
+    },
+    [conversation_id, chatStarted]
+  );
+
   // 从共享模型选择 hook 中获取当前模型及展示名称
   // Read current model and display helper from shared selection hook
   const { currentModel, getDisplayModelName } = modelSelection;
@@ -332,70 +393,76 @@ const GeminiSendBox: React.FC<{
         lockMultiLine={true}
         disableFileAttachment={!!workspace}
         tools={
-          // workspace가 있으면 + 버튼 숨김 (readFile 도구로 파일 접근 가능)
-          workspace ? null : (
-            <Button
-              type='secondary'
-              shape='circle'
-              icon={<Plus theme='outline' size='14' strokeWidth={2} fill={iconColors.primary} />}
-              onClick={() => {
-                void ipcBridge.dialog.showOpen.invoke({ properties: ['openFile', 'multiSelections'] }).then((files) => {
-                  if (files && files.length > 0) {
-                    // 파일명 추출 헬퍼
-                    const getFileName = (path: string) => path.split(/[\\/]/).pop() || path;
+          <div className='flex items-center gap-4px'>
+            {/* Gem 선택 버튼 / Gem selection button */}
+            <GemPopover visible={gemPopoverVisible} onVisibleChange={setGemPopoverVisible} selectedGem={selectedGem} onSelectGem={handleGemSelect} disabled={chatStarted}>
+              <GemButton selectedGem={selectedGem} selectedGemName={savedGemName} disabled={chatStarted} />
+            </GemPopover>
+            {/* workspace가 있으면 + 버튼 숨김 (readFile 도구로 파일 접근 가능) */}
+            {!workspace && (
+              <Button
+                type='secondary'
+                shape='circle'
+                icon={<Plus theme='outline' size='14' strokeWidth={2} fill={iconColors.primary} />}
+                onClick={() => {
+                  void ipcBridge.dialog.showOpen.invoke({ properties: ['openFile', 'multiSelections'] }).then((files) => {
+                    if (files && files.length > 0) {
+                      // 파일명 추출 헬퍼
+                      const getFileName = (path: string) => path.split(/[\\/]/).pop() || path;
 
-                    // workspace 파일 목록도 가져와서 체크
-                    emitter.emit('gemini.workspace.files.get', (workspaceFileNames: string[]) => {
-                      // 각각의 중복 원인을 구분
-                      const atPathFileNames = atPath.map((item) => getFileName(typeof item === 'string' ? item : item.path));
-                      const uploadFileNames = new Set(uploadFile.map(getFileName));
-                      const attachedFileNames = new Set([...uploadFileNames, ...atPathFileNames]);
-                      const workspaceFileNamesSet = new Set(workspaceFileNames);
+                      // workspace 파일 목록도 가져와서 체크
+                      emitter.emit('gemini.workspace.files.get', (workspaceFileNames: string[]) => {
+                        // 각각의 중복 원인을 구분
+                        const atPathFileNames = atPath.map((item) => getFileName(typeof item === 'string' ? item : item.path));
+                        const uploadFileNames = new Set(uploadFile.map(getFileName));
+                        const attachedFileNames = new Set([...uploadFileNames, ...atPathFileNames]);
+                        const workspaceFileNamesSet = new Set(workspaceFileNames);
 
-                      const newFiles: string[] = [];
-                      const workspaceDuplicates: string[] = [];
-                      const attachedDuplicates: string[] = [];
+                        const newFiles: string[] = [];
+                        const workspaceDuplicates: string[] = [];
+                        const attachedDuplicates: string[] = [];
 
-                      for (const f of files) {
-                        const fileName = getFileName(f);
-                        if (attachedFileNames.has(fileName)) {
-                          attachedDuplicates.push(f);
-                        } else if (workspaceFileNamesSet.has(fileName)) {
-                          workspaceDuplicates.push(f);
-                        } else {
-                          newFiles.push(f);
+                        for (const f of files) {
+                          const fileName = getFileName(f);
+                          if (attachedFileNames.has(fileName)) {
+                            attachedDuplicates.push(f);
+                          } else if (workspaceFileNamesSet.has(fileName)) {
+                            workspaceDuplicates.push(f);
+                          } else {
+                            newFiles.push(f);
+                          }
                         }
-                      }
 
-                      // 중복 메시지 표시
-                      if (workspaceDuplicates.length > 0 && attachedDuplicates.length === 0 && newFiles.length === 0) {
-                        // workspace에만 중복
-                        Message.warning(t('messages.workspaceAllFilesSkipped'));
-                      } else if (attachedDuplicates.length > 0 && workspaceDuplicates.length === 0 && newFiles.length === 0) {
-                        // 첨부에만 중복
-                        Message.warning(t('messages.allFilesDuplicate'));
-                      } else if ((workspaceDuplicates.length > 0 || attachedDuplicates.length > 0) && newFiles.length === 0) {
-                        // 둘 다 섞여서 중복
-                        Message.warning(t('messages.allFilesDuplicate'));
-                      } else if (workspaceDuplicates.length > 0 && newFiles.length > 0) {
-                        // 일부가 workspace에 중복
-                        const duplicateNames = workspaceDuplicates.map(getFileName).join(', ');
-                        Message.warning(t('messages.workspaceFilesSkipped', { files: duplicateNames }));
-                      } else if (attachedDuplicates.length > 0 && newFiles.length > 0) {
-                        // 일부가 첨부에 중복
-                        const duplicateNames = attachedDuplicates.map(getFileName).join(', ');
-                        Message.warning(t('messages.duplicateFilesIgnored', { files: duplicateNames }));
-                      }
+                        // 중복 메시지 표시
+                        if (workspaceDuplicates.length > 0 && attachedDuplicates.length === 0 && newFiles.length === 0) {
+                          // workspace에만 중복
+                          Message.warning(t('messages.workspaceAllFilesSkipped'));
+                        } else if (attachedDuplicates.length > 0 && workspaceDuplicates.length === 0 && newFiles.length === 0) {
+                          // 첨부에만 중복
+                          Message.warning(t('messages.allFilesDuplicate'));
+                        } else if ((workspaceDuplicates.length > 0 || attachedDuplicates.length > 0) && newFiles.length === 0) {
+                          // 둘 다 섞여서 중복
+                          Message.warning(t('messages.allFilesDuplicate'));
+                        } else if (workspaceDuplicates.length > 0 && newFiles.length > 0) {
+                          // 일부가 workspace에 중복
+                          const duplicateNames = workspaceDuplicates.map(getFileName).join(', ');
+                          Message.warning(t('messages.workspaceFilesSkipped', { files: duplicateNames }));
+                        } else if (attachedDuplicates.length > 0 && newFiles.length > 0) {
+                          // 일부가 첨부에 중복
+                          const duplicateNames = attachedDuplicates.map(getFileName).join(', ');
+                          Message.warning(t('messages.duplicateFilesIgnored', { files: duplicateNames }));
+                        }
 
-                      if (newFiles.length > 0) {
-                        setUploadFile([...uploadFile, ...newFiles]);
-                      }
-                    });
-                  }
-                });
-              }}
-            />
-          )
+                        if (newFiles.length > 0) {
+                          setUploadFile([...uploadFile, ...newFiles]);
+                        }
+                      });
+                    }
+                  });
+                }}
+              />
+            )}
+          </div>
         }
         sendButtonPrefix={<ContextUsageIndicator tokenUsage={tokenUsage} contextLimit={getModelContextLimit(currentModel?.useModel)} size={24} />}
         prefix={

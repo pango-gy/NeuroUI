@@ -177,6 +177,12 @@ export const document = {
   convert: bridge.buildProvider<import('./types/conversion').DocumentConversionResponse, import('./types/conversion').DocumentConversionRequest>('document.convert'),
 };
 
+// Gems (시스템 프롬프트) 관련 인터페이스 / Gems (system prompt) API
+export const gems = {
+  injectGem: bridge.buildProvider<IBridgeResponse, { conversation_id: string; systemPrompt: string }>('gems.inject-gem'),
+  clearGem: bridge.buildProvider<IBridgeResponse, { conversation_id: string }>('gems.clear-gem'),
+};
+
 // 窗口控制相关接口 / Window controls API
 export const windowControls = {
   minimize: bridge.buildProvider<void, void>('window-controls:minimize'),
@@ -209,7 +215,7 @@ export interface ICreateConversationParams {
   name?: string;
   model: TProviderWithModel;
   workspaceId?: string; // 브랜드(워크스페이스) ID
-  extra: { workspace?: string; defaultFiles?: string[]; backend?: AcpBackend; cliPath?: string; webSearchEngine?: 'google' | 'default'; agentName?: string; customAgentId?: string };
+  extra: { workspace?: string; defaultFiles?: string[]; backend?: AcpBackend; cliPath?: string; webSearchEngine?: 'google' | 'default'; agentName?: string; customAgentId?: string; selectedGemId?: string; selectedGemName?: string; selectedGemSystemPrompt?: string };
 }
 interface IResetConversationParams {
   id?: string;
