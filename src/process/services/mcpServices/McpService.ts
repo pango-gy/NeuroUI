@@ -79,6 +79,7 @@ export class McpService {
       'google-ads-mcp': process.env.VITE_GOOGLE_ADS_MCP_URL,
       'google-analytics-mcp': process.env.VITE_GOOGLE_ANALYTICS_MCP_URL,
       'naver-ads-mcp': process.env.VITE_NAVER_ADS_MCP_URL,
+      'meta-ads-mcp': process.env.VITE_META_ADS_META_MCP_URL,
       'naver-openapi-mcp': process.env.VITE_NAVER_OPENAPI_MCP_URL,
     };
 

@@ -199,6 +199,7 @@
       "title": "Hi, what's your plan for today?",
       "placeholder": "Send a message, upload files, or open a folder...",
       "uploadFile": "Upload Files",
+      "pythonTip": "Tip: Install Python to unlock powerful features like data analysis.",
       "linkFolder": "Open Folder",
       "newConversation": "New Chat",
       "multiAgentModeEnabled": "Entering multi-agent mode",

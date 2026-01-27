@@ -202,6 +202,7 @@
       "title": "안녕하세요, 오늘 무엇을 도와드릴까요?",
       "placeholder": "메시지를 보내거나, 파일을 업로드하거나, 폴더를 열어보세요...",
       "uploadFile": "파일 업로드",
+      "pythonTip": "Tip: Python을 설치하면 데이터 분석 등 더 강력한 AI 기능을 사용할 수 있습니다.",
       "linkFolder": "폴더 열기",
       "newConversation": "새 채팅",
       "multiAgentModeEnabled": "멀티 에이전트 모드 진입",

@@ -186,8 +186,9 @@
   "conversation": {
     "welcome": {
       "title": "Hi，今天有什么安排？",
-      "placeholder": "发消息、上传文件或打开文件夹...",
+      "placeholder": "发送消息，上传文件，或打开文件夹...",
       "uploadFile": "上传文件",
+      "pythonTip": "提示：安装 Python 可解锁数据分析等更强大的 AI 功能。",
       "linkFolder": "打开文件夹",
       "newConversation": "新对话",
       "multiAgentModeEnabled": "已进入多智能体模式",

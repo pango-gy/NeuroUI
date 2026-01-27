@@ -358,6 +358,17 @@ const getDefaultMcpServers = (): IMcpServer[] => {
       transportType: 'streamable_http' as const,
     },
     {
+      name: 'meta-ads-mcp',
+      description: 'Meta Ads MCP Server',
+      config: {
+        url: process.env.VITE_META_ADS_META_MCP_URL || 'http://localhost:3000/meta-ads/mcp',
+        headers: {
+          Authorization: 'Bearer <token>',
+        },
+      },
+      transportType: 'streamable_http' as const,
+    },
+    {
       name: 'naver-openapi-mcp',
       description: 'Naver Open API MCP Server',
       enabled: true, // 항상 활성화 - Firestore connections와 무관

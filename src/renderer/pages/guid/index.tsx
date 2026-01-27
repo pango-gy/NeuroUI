@@ -32,7 +32,7 @@ import { iconColors } from '@/renderer/theme/colors';
 import { hasSpecificModelCapability } from '@/renderer/utils/modelCapabilities';
 import type { AcpBackend } from '@/types/acpTypes';
 import { Button, ConfigProvider, Dropdown, Input, Menu, Message, Tooltip } from '@arco-design/web-react';
-import { ArrowUp, Plus, UploadOne } from '@icon-park/react';
+import { ArrowUp, Plus, Tips, UploadOne } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -797,6 +797,14 @@ const Guid: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+        <div className='mt-4 flex justify-center'>
+          <a href='https://www.python.org/downloads/' target='_blank' rel='noreferrer' className='group flex items-center h-8 rounded-full bg-fill-2 hover:bg-fill-3 transition-all duration-300 ease-in-out no-underline border border-transparent hover:border-border overflow-hidden max-w-[32px] hover:max-w-[500px]' style={{ textDecoration: 'none' }}>
+            <div className='flex-shrink-0 w-8 h-8 flex items-center justify-center'>
+              <Tips theme='outline' size='14' fill={iconColors.secondary} />
+            </div>
+            <span className='whitespace-nowrap text-12px text-t-secondary opacity-0 group-hover:opacity-100 transition-opacity duration-300 pr-3'>{t('conversation.welcome.pythonTip')}</span>
+          </a>
         </div>
       </div>
     </ConfigProvider>

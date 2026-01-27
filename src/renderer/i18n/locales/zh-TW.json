@@ -287,9 +287,10 @@
   "conversation": {
     "welcome": {
       "title": "Hi，今天有什麼安排？",
-      "placeholder": "發送訊息、上傳檔案或開啟資料夾...",
+      "placeholder": "發送訊息，上傳檔案，或開啟資料夹...",
       "uploadFile": "上傳檔案",
-      "linkFolder": "開啟資料夾",
+      "pythonTip": "提示：安裝 Python 可解鎖數據分析等更強大的 AI 功能。",
+      "linkFolder": "開啟資料夹",
       "newConversation": "新對話",
       "multiAgentModeEnabled": "已進入多智能體模式",
       "selectModel": "選擇模型",

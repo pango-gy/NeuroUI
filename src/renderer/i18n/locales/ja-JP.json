@@ -316,9 +316,10 @@
   "conversation": {
     "welcome": {
       "title": "Hi、今日の予定は何ですか？",
-      "placeholder": "メッセージの送信、ファイルの追加、またはフォルダーの追加...",
-      "uploadFile": "ファイルを追加",
-      "linkFolder": "フォルダを追加",
+      "placeholder": "メッセージを送信、ファイルをアップロード、またはフォルダを開く...",
+      "uploadFile": "ファイルをアップロード",
+      "pythonTip": "ヒント：Pythonをインストールすると、データ分析などの強力なAI機能を使用できます。",
+      "linkFolder": "フォルダを開く",
       "newConversation": "新しいチャット",
       "multiAgentModeEnabled": "マルチエージェントモードに入ります",
       "selectModel": "モデルを選択",

@@ -1,7 +1,9 @@
 import GoogleLogo from '@/renderer/assets/logos/google.svg';
 import GoogleAdsLogo from '@/renderer/assets/logos/google_ads.svg';
 import GoogleAnalyticsLogo from '@/renderer/assets/logos/google_analytics.svg';
+import MetaLogo from '@/renderer/assets/logos/meta.svg';
 import NaverLogo from '@/renderer/assets/logos/naver.svg';
+import NaverDataLabLogo from '@/renderer/assets/logos/naver_datalab.svg';
 import { useMcpServers } from '@/renderer/hooks/mcp/useMcpServers';
 import { Tooltip } from '@arco-design/web-react';
 import React, { useMemo } from 'react';
@@ -37,6 +39,12 @@ export const ConnectedMcpIcons: React.FC = () => {
         } else if (server.name.includes('naver-ads')) {
           displayName = '네이버 광고 연동';
           iconSrc = NaverLogo;
+        } else if (server.name.includes('naver-openapi')) {
+          displayName = '네이버 데이터랩 연동';
+          iconSrc = NaverDataLabLogo;
+        } else if (server.name.includes('meta-ads')) {
+          displayName = 'Meta Ads 연동';
+          iconSrc = MetaLogo;
         } else if (server.name.toLowerCase().includes('google')) {
           iconSrc = GoogleLogo;
         }

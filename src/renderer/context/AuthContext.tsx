@@ -29,6 +29,11 @@ const MCP_PLATFORMS = {
     url: process.env.VITE_NAVER_ADS_MCP_URL || 'https://mcp.pango-gy.com/naver-ads/mcp',
     description: 'Naver Ads MCP Server',
   },
+  'meta-ads-mcp': {
+    platform: 'meta_ads',
+    url: process.env.VITE_META_ADS_META_MCP_URL || 'http://localhost:3000/meta-ads/mcp',
+    description: 'Meta Ads MCP Server',
+  },
 } as const;
 
 type McpServerName = keyof typeof MCP_PLATFORMS;
